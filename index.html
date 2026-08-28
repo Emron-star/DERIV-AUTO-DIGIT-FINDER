@@ -73,12 +73,12 @@
     .log .entry.error { color: #fca5a5; background: #3b1a1a; padding: 2px 6px; border-radius: 4px; }
     .log .entry.info { color: #93c5fd; }
 
-    /* Signal Timer UI */
+    /* Signal Panel */
     .signal-panel {
       background: #14181f; border: 1px solid #2a3344; border-radius: 14px;
       padding: 16px; margin-bottom: 14px; text-align: center;
       position: relative;
-      min-height: 180px;
+      min-height: 200px;
     }
     .signal-panel .phase-title {
       font-size: 22px; font-weight: 700; margin: 4px 0;
@@ -104,12 +104,40 @@
       height: 100%; background: #7ec8e3; width: 0%; border-radius: 4px;
       transition: width 0.3s linear;
     }
+    .signal-panel .predict-wrap {
+      display: flex; justify-content: center; gap: 40px; margin: 12px 0;
+    }
+    .signal-panel .box {
+      text-align: center; padding: 8px 16px; border-radius: 12px;
+      background: #1f2937; min-width: 120px;
+    }
+    .signal-panel .box .label {
+      font-size: 14px; color: #94a3b8; display: block;
+    }
+    .signal-panel .box .digit {
+      font-size: 52px; font-weight: 800; line-height: 1.2;
+    }
+    .signal-panel .box.pred .digit { color: #fbbf24; }
+    .signal-panel .box.entry .digit { color: #60a5fa; }
+    .signal-panel .info-line {
+      font-size: 14px; color: #94a3b8; margin: 4px 0;
+    }
     .signal-panel .window-dots {
       font-size: 28px; letter-spacing: 10px; margin: 8px 0;
     }
     .signal-panel .window-info {
       font-size: 14px; color: #94a3b8;
     }
+    .signal-panel .trade-now-banner {
+      display: none;
+      font-size: 28px; font-weight: 800; color: #00ff88;
+      background: rgba(0,255,136,0.1); padding: 10px; border-radius: 12px;
+      border: 2px solid #00ff88; animation: pulse 1s infinite;
+      margin: 8px 0;
+    }
+    .signal-panel .trade-now-banner.show { display: block; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
     .signal-panel .result-overlay {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       border-radius: 14px; display: flex; flex-direction: column;
@@ -119,10 +147,11 @@
       transition: opacity 0.3s;
     }
     .signal-panel .result-overlay.hidden { display: none; }
-    .result-overlay.win { color: #6ee7b7; }
-    .result-overlay.loss { color: #fca5a5; }
+    .result-overlay.win { color: #6ee7b7; border: 3px solid #6ee7b7; }
+    .result-overlay.loss { color: #fca5a5; border: 3px solid #fca5a5; }
     .result-overlay .sub { font-size: 18px; font-weight: 400; margin-top: 8px; }
 
+    /* Settings */
     .settings {
       background: #14181f; border: 1px solid #2a3344; border-radius: 12px;
       padding: 14px; margin-bottom: 14px;
@@ -150,7 +179,7 @@
 <body>
   <h1>📊 Deriv Digit Finder + Signal Timer</h1>
 
-  <!-- Settings Panel -->
+  <!-- Settings -->
   <div class="settings" id="settingsPanel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
       <span style="font-weight:600;">🔐 API Credentials</span>
@@ -180,7 +209,7 @@
           <option value="R_50_1S">Volatility 50 (1s)</option>
           <option value="R_50">Volatility 50</option>
         </select>
-        <button id="startSignalBtn" style="background:#065f46; border-color:#10b981;">▶ Start Signal Timer</button>
+        <button id="startSignalBtn" style="background:#065f46; border-color:#10b981;">▶ Start Signal</button>
         <button id="stopSignalBtn" class="danger">⏹ Stop</button>
       </div>
       <div class="hint">
@@ -209,12 +238,30 @@
     <span id="tickCounter">📡 0 ticks</span>
   </div>
 
-  <!-- Signal Timer Panel -->
+  <!-- Signal Panel -->
   <div class="signal-panel" id="signalPanel">
-    <div class="phase-title" id="phaseTitle">⏳ COLLECTING TICKS</div>
+    <div class="phase-title" id="phaseTitle">⏳ SIGNAL IDLE</div>
     <div class="timer-display" id="timerDisplay">--</div>
-    <div class="status-text" id="statusText">Collecting ticks…</div>
+    <div class="status-text" id="statusText">Press Start to begin</div>
     <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+
+    <!-- PREDICTED & ENTRY boxes -->
+    <div class="predict-wrap">
+      <div class="box pred">
+        <span class="label">PREDICTED</span>
+        <span class="digit" id="predDigit">-</span>
+      </div>
+      <div class="box entry">
+        <span class="label">ENTRY</span>
+        <span class="digit" id="entryDigit">-</span>
+      </div>
+    </div>
+    <div class="info-line" id="infoLine">Predict - | Last - | Gap -</div>
+
+    <!-- Trade Now Banner -->
+    <div class="trade-now-banner" id="tradeNowBanner">⚡ TRADE NOW! [X] MATCH ⚡</div>
+
+    <!-- Window dots -->
     <div class="window-dots" id="windowDots">• • • • •</div>
     <div class="window-info" id="windowInfo">Waiting for ticks…</div>
 
@@ -245,12 +292,7 @@
       'R_25_1S': 'Volatility 25 (1s)',
       'R_50_1S': 'Volatility 50 (1s)',
       'R_75_1S': 'Volatility 75 (1s)',
-      'R_100_1S': 'Volatility 100 (1s)',
-      'R_15_1S': 'Volatility 15 (1s)',
-      'R_30_1S': 'Volatility 30 (1s)',
-      'R_90_1S': 'Volatility 90 (1s)',
-      'R_150_1S': 'Volatility 150 (1s)',
-      'R_250_1S': 'Volatility 250 (1s)'
+      'R_100_1S': 'Volatility 100 (1s)'
     };
     const DEFAULT_SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', 'R_10_1S', 'R_25_1S', 'R_50_1S', 'R_75_1S', 'R_100_1S'];
 
@@ -286,7 +328,7 @@
     let signalTimerInterval = null;
     let signalWindowTicks = [];
     let signalPredictedDigit = '-';
-    let signalResultShown = false;
+    let signalPredictionData = null; // {pred, gaps, counts, maxGap}
     let signalCollectCount = 0;
     const COLLECT_THRESHOLD = 50;
 
@@ -319,6 +361,10 @@
     const timerDisplay = document.getElementById('timerDisplay');
     const statusText = document.getElementById('statusText');
     const progressFill = document.getElementById('progressFill');
+    const predDigit = document.getElementById('predDigit');
+    const entryDigit = document.getElementById('entryDigit');
+    const infoLine = document.getElementById('infoLine');
+    const tradeNowBanner = document.getElementById('tradeNowBanner');
     const windowDots = document.getElementById('windowDots');
     const windowInfo = document.getElementById('windowInfo');
     const resultOverlay = document.getElementById('resultOverlay');
@@ -372,22 +418,56 @@
       osc.start(); osc.stop(audioCtx.currentTime + duration);
     }
     function playDoubleBeep() {
-      playBeep(1200, 0.32);
-      setTimeout(() => playBeep(1200, 0.32), 350);
+      playBeep(1200, 0.35);
+      setTimeout(() => playBeep(1200, 0.35), 400);
     }
 
-    // ─── prediction ──────────────────────────────────────────────────
-    function analyze(sym) {
-      const st = state[sym], h = st.history;
-      if (h.length < 20) return '-';
-      const method = methodSelect.value, c = st.counter;
-      for (let d = 0; d < 10; d++) { let g = 0; for (let i = h.length-1; i>=0; i--) { if (h[i]===d) break; g++; } st.gaps[d]=g; }
-      let best = 0;
-      if (method === 'overdue') { let max = st.gaps[0]; for (let d=1; d<10; d++) if (st.gaps[d] > max) { max = st.gaps[d]; best = d; } }
-      else if (method === 'hot') { let max = c[0]; for (let d=1; d<10; d++) if (c[d] > max) { max = c[d]; best = d; } }
-      else if (method === 'cold') { let min = c[0]; for (let d=1; d<10; d++) if (c[d] < min) { min = c[d]; best = d; } }
-      else { const t = h.length / 10; let bd = Math.abs(c[0]-t), best = 0; for (let d=1; d<10; d++) { const diff = Math.abs(c[d]-t); if (diff < bd) { bd = diff; best = d; } } }
-      return best;
+    // ─── prediction (calcPrediction) ──────────────────────────────
+    function calcPrediction(sym) {
+      const st = state[sym];
+      if (!st || st.history.length < 80) return null;
+      const h = st.history;
+      // last 100 for counts
+      const last100 = h.slice(-100);
+      const counts = Array(10).fill(0);
+      last100.forEach(d => counts[d]++);
+      // gaps from the end
+      const gaps = Array(10).fill(0);
+      for (let d = 0; d < 10; d++) {
+        let g = 0;
+        for (let i = h.length - 1; i >= 0; i--) {
+          if (h[i] === d) break;
+          g++;
+        }
+        gaps[d] = g;
+      }
+      // pick max gap (most overdue)
+      let maxGap = -1;
+      let pred = 0;
+      for (let d = 0; d < 10; d++) {
+        if (gaps[d] > maxGap) {
+          maxGap = gaps[d];
+          pred = d;
+        }
+      }
+      return { pred, gaps, counts, maxGap };
+    }
+
+    // ─── update prediction UI ──────────────────────────────────────
+    function updatePredictUI(info) {
+      if (!info) {
+        predDigit.textContent = '-';
+        entryDigit.textContent = '-';
+        infoLine.textContent = 'Predict - | Last - | Gap -';
+        return;
+      }
+      const st = state[signalSymbol];
+      const last = st ? st.lastDigit : '-';
+      predDigit.textContent = info.pred;
+      entryDigit.textContent = info.pred;
+      infoLine.textContent = `Predict ${info.pred} | Last ${last} | Gap ${info.maxGap}`;
+      // update trade banner digit
+      tradeNowBanner.innerHTML = `⚡ TRADE NOW! ${info.pred} MATCH ⚡`;
     }
 
     // ─── rendering ──────────────────────────────────────────────────
@@ -466,26 +546,20 @@
       const oldPred = st.predicted;
       st.predicted = newPred;
 
-      // Update prediction for signal symbol
+      // Update prediction for signal symbol if running
       if (sym === signalSymbol && signalRunning) {
-        signalPredictedDigit = newPred;
-        // If we are in collecting phase, count ticks
-        if (signalPhase === 'collecting') {
-          signalCollectCount = st.history.length;
-          updateCollectUI();
-        }
-        // If we are in window phase, collect ticks
-        if (signalPhase === 'window') {
-          signalWindowTicks.push(digit);
-          updateWindowUI();
-          // If we have 5 ticks, close window and show result
-          if (signalWindowTicks.length === 5) {
-            closeWindowAndShowResult();
+        // Update prediction data in real-time (will be used in startCycle)
+        const info = calcPrediction(signalSymbol);
+        if (info) {
+          signalPredictionData = info;
+          // If we are in ready/go phase, update UI prediction dynamically (optional)
+          if (signalPhase === 'ready' || signalPhase === 'go') {
+            updatePredictUI(info);
           }
         }
       }
 
-      // Normal match detection for all symbols (keeps cards updating)
+      // Normal match detection for all symbols
       if (oldPred !== '-' && st.history.length >= 21 && st.lastPrediction !== undefined && st.lastPrediction !== '-') {
         const win = digit === st.lastPrediction;
         st.totalPredictions++;
@@ -504,39 +578,248 @@
       }
       st.lastPrediction = newPred;
       scheduleRender(sym);
+
+      // Handle signal window ticks
+      if (sym === signalSymbol && signalRunning && signalPhase === 'window') {
+        signalWindowTicks.push(digit);
+        updateWindowUI();
+        if (signalWindowTicks.length === 5) {
+          closeWindowAndShowResult();
+        }
+      }
+    }
+
+    // ─── analyze (for card predictions) ────────────────────────────
+    function analyze(sym) {
+      const st = state[sym], h = st.history;
+      if (h.length < 20) return '-';
+      const method = methodSelect.value, c = st.counter;
+      for (let d = 0; d < 10; d++) { let g = 0; for (let i = h.length-1; i>=0; i--) { if (h[i]===d) break; g++; } st.gaps[d]=g; }
+      let best = 0;
+      if (method === 'overdue') { let max = st.gaps[0]; for (let d=1; d<10; d++) if (st.gaps[d] > max) { max = st.gaps[d]; best = d; } }
+      else if (method === 'hot') { let max = c[0]; for (let d=1; d<10; d++) if (c[d] > max) { max = c[d]; best = d; } }
+      else if (method === 'cold') { let min = c[0]; for (let d=1; d<10; d++) if (c[d] < min) { min = c[d]; best = d; } }
+      else { const t = h.length / 10; let bd = Math.abs(c[0]-t), best = 0; for (let d=1; d<10; d++) { const diff = Math.abs(c[d]-t); if (diff < bd) { bd = diff; best = d; } } }
+      return best;
     }
 
     // ─── Signal Timer Functions ─────────────────────────────────────
-    function updateCollectUI() {
-      const st = state[signalSymbol];
-      const count = st ? st.history.length : 0;
-      phaseTitle.textContent = `⏳ COLLECTING TICKS… ${count}/${COLLECT_THRESHOLD}`;
-      timerDisplay.textContent = '--';
-      statusText.textContent = `Collecting ${getDisplayName(signalSymbol)}…`;
-      progressFill.style.width = Math.min(100, (count / COLLECT_THRESHOLD) * 100) + '%';
+    function startCycle() {
+      if (!signalRunning) return;
+      // Compute prediction
+      const info = calcPrediction(signalSymbol);
+      if (!info) {
+        // Not enough data, wait and retry
+        setTimeout(() => { if (signalRunning) startCycle(); }, 600);
+        return;
+      }
+      signalPredictionData = info;
+      signalPredictedDigit = info.pred;
+      updatePredictUI(info);
+      addLog(`🔔 Signal started for ${getDisplayName(signalSymbol)} | Predicted digit: ${info.pred}`, 'info');
+
+      // Reset window
+      signalWindowTicks = [];
+      signalPhase = 'ready';
+      signalCountdown = 15;
+      resultOverlay.classList.add('hidden');
+      tradeNowBanner.classList.remove('show');
       windowDots.textContent = '• • • • •';
-      windowInfo.textContent = `Need ${COLLECT_THRESHOLD} ticks to start signal`;
+      windowInfo.textContent = 'Ready in 15s';
+
+      // Update UI for READY phase
+      phaseTitle.textContent = '◉ SIGNAL FOUND - READY';
+      phaseTitle.style.color = '#ffcc33';
+      timerDisplay.textContent = '15:00';
+      timerDisplay.style.color = '#7ec8e3';
+      timerDisplay.classList.remove('blink');
+      statusText.textContent = 'READY';
+      statusText.style.color = '#ffcc33';
+      progressFill.style.background = '#7ec8e3';
+      progressFill.style.width = '0%';
+
+      // Clear any existing interval
+      if (signalTimerInterval) clearInterval(signalTimerInterval);
+
+      signalTimerInterval = setInterval(() => {
+        if (!signalRunning) { clearInterval(signalTimerInterval); return; }
+        signalCountdown--;
+        // Update timer display
+        const mm = String(Math.floor(signalCountdown / 60)).padStart(2, '0');
+        const ss = String(signalCountdown % 60).padStart(2, '0');
+        timerDisplay.textContent = mm + ':' + ss;
+
+        const progress = ((15 - signalCountdown) / 15) * 100;
+        progressFill.style.width = progress + '%';
+
+        // Phase logic
+        if (signalCountdown > 5) {
+          // READY phase (15..6)
+          phaseTitle.textContent = '◉ SIGNAL FOUND - READY';
+          phaseTitle.style.color = '#ffcc33';
+          timerDisplay.style.color = '#7ec8e3';
+          timerDisplay.classList.remove('blink');
+          statusText.textContent = 'READY';
+          statusText.style.color = '#ffcc33';
+          progressFill.style.background = '#7ec8e3';
+          const secs = signalCountdown;
+          windowInfo.textContent = `Ready in ${secs}s`;
+        } else if (signalCountdown > 0) {
+          // GO TIME phase (5..1)
+          if (signalPhase !== 'go') {
+            signalPhase = 'go';
+            phaseTitle.textContent = '◉ GO TIME!';
+            phaseTitle.style.color = '#ff3b3b';
+            timerDisplay.style.color = '#ff3b3b';
+            timerDisplay.classList.add('blink');
+            statusText.textContent = 'GO TIME! ⚡';
+            statusText.style.color = '#ff3b3b';
+            progressFill.style.background = '#ff3b3b';
+            addLog('⚡ GO TIME!', 'info');
+          }
+          // beep each second
+          playBeep(880, 0.12);
+          const secs = signalCountdown;
+          windowInfo.textContent = `GO in ${secs}s`;
+        } else {
+          // countdown == 0 => TRADE NOW
+          clearInterval(signalTimerInterval);
+          signalTimerInterval = null;
+          openTradeWindow();
+        }
+      }, 1000);
     }
 
+    function openTradeWindow() {
+      if (!signalRunning) return;
+      signalPhase = 'window';
+      signalWindowTicks = [];
+      resultOverlay.classList.add('hidden');
+
+      // Show TRADE NOW banner
+      tradeNowBanner.classList.add('show');
+      tradeNowBanner.innerHTML = `⚡ TRADE NOW! ${signalPredictedDigit} MATCH ⚡`;
+
+      phaseTitle.textContent = '● TRADE WINDOW ACTIVE';
+      phaseTitle.style.color = '#60a5fa';
+      timerDisplay.textContent = '00:00';
+      timerDisplay.style.color = '#60a5fa';
+      timerDisplay.classList.remove('blink');
+      statusText.textContent = 'WINDOW OPEN';
+      statusText.style.color = '#60a5fa';
+      progressFill.style.background = '#60a5fa';
+      progressFill.style.width = '100%';
+
+      windowDots.textContent = '• • • • •';
+      windowInfo.textContent = 'Waiting for 5 ticks…';
+
+      playDoubleBeep();
+      addLog(`🚪 Trade window opened for ${getDisplayName(signalSymbol)}. Waiting for 5 ticks.`, 'info');
+      // Ticks will be collected via processTick
+    }
+
+    function updateWindowUI() {
+      const ticks = signalWindowTicks;
+      let display = '';
+      for (let i = 0; i < 5; i++) {
+        if (i < ticks.length) display += ticks[i] + ' ';
+        else display += '• ';
+      }
+      windowDots.textContent = display.trim();
+      windowInfo.textContent = `Tick ${ticks.length}/5 got ${ticks.length>0?ticks.join(','):'…'} need ${5-ticks.length} more`;
+    }
+
+    function closeWindowAndShowResult() {
+      if (!signalRunning) return;
+      signalPhase = 'result';
+      if (signalTimerInterval) clearInterval(signalTimerInterval);
+
+      const pred = signalPredictedDigit;
+      const ticks = signalWindowTicks;
+      const win = ticks.some(t => t === pred);
+
+      // Show result overlay
+      resultOverlay.classList.remove('hidden');
+      if (win) {
+        resultText.textContent = 'WIN ✓';
+        resultText.style.color = '#6ee7b7';
+        resultOverlay.className = 'result-overlay win';
+        addLog(`✅ SIGNAL WIN! Predicted ${pred} appeared in ${ticks.join(',')}`, 'win');
+        playDoubleBeep();
+      } else {
+        resultText.textContent = 'LOSS ✕';
+        resultText.style.color = '#fca5a5';
+        resultOverlay.className = 'result-overlay loss';
+        addLog(`❌ SIGNAL LOSS! Predicted ${pred} did not appear in ${ticks.join(',')}`, 'loss');
+      }
+
+      // Countdown to restart
+      let countdown = 3;
+      resultSub.textContent = `Continuing in ${countdown}s…`;
+      const resultInterval = setInterval(() => {
+        countdown--;
+        if (countdown <= 0) {
+          clearInterval(resultInterval);
+          resultOverlay.classList.add('hidden');
+          tradeNowBanner.classList.remove('show');
+          if (signalRunning) {
+            // Restart cycle
+            startCycle();
+          }
+        } else {
+          resultSub.textContent = `Continuing in ${countdown}s…`;
+        }
+      }, 1000);
+
+      // Update UI for result phase
+      phaseTitle.textContent = win ? '✅ WIN' : '❌ LOSS';
+      phaseTitle.style.color = win ? '#6ee7b7' : '#fca5a5';
+      timerDisplay.textContent = '00:00';
+      statusText.textContent = win ? 'WINNER' : 'LOSS';
+      progressFill.style.width = '100%';
+      progressFill.style.background = win ? '#6ee7b7' : '#fca5a5';
+      windowInfo.textContent = `Result: ${win ? 'WIN' : 'LOSS'} in 5 ticks`;
+    }
+
+    // ─── Signal control ─────────────────────────────────────────────
     function startSignal() {
       if (signalRunning) return;
       const sym = signalSymbolSelect.value;
       signalSymbol = sym;
       signalRunning = true;
-      signalPhase = 'collecting';
+      signalPhase = 'idle';
       signalWindowTicks = [];
-      signalResultShown = false;
       resultOverlay.classList.add('hidden');
+      tradeNowBanner.classList.remove('show');
 
-      // Check if we already have enough ticks
+      // Check if we have enough ticks
       const st = state[signalSymbol];
-      if (st && st.history.length >= COLLECT_THRESHOLD) {
-        // Ready to start the timer
-        beginCountdown();
+      if (!st || st.history.length < 80) {
+        // Wait for ticks
+        phaseTitle.textContent = '⏳ COLLECTING TICKS';
+        timerDisplay.textContent = '--';
+        statusText.textContent = `Collecting ${getDisplayName(signalSymbol)}…`;
+        progressFill.style.width = '0%';
+        windowInfo.textContent = `Need 80 ticks, have ${st?st.history.length:0}`;
+        addLog(`⏳ Collecting ticks for ${getDisplayName(signalSymbol)}`, 'info');
+        // start a check interval
+        if (signalTimerInterval) clearInterval(signalTimerInterval);
+        signalTimerInterval = setInterval(() => {
+          if (!signalRunning) { clearInterval(signalTimerInterval); return; }
+          const st2 = state[signalSymbol];
+          if (st2 && st2.history.length >= 80) {
+            clearInterval(signalTimerInterval);
+            signalTimerInterval = null;
+            startCycle();
+          } else {
+            const cnt = st2 ? st2.history.length : 0;
+            phaseTitle.textContent = `⏳ COLLECTING TICKS (${cnt}/80)`;
+            windowInfo.textContent = `Need 80 ticks, have ${cnt}`;
+            progressFill.style.width = Math.min(100, (cnt/80)*100) + '%';
+          }
+        }, 500);
       } else {
-        // Enter collecting phase
-        updateCollectUI();
-        addLog(`⏳ Signal: Collecting ${COLLECT_THRESHOLD} ticks for ${getDisplayName(signalSymbol)}`, 'info');
+        startCycle();
       }
     }
 
@@ -554,190 +837,11 @@
       windowDots.textContent = '• • • • •';
       windowInfo.textContent = '';
       resultOverlay.classList.add('hidden');
+      tradeNowBanner.classList.remove('show');
+      predDigit.textContent = '-';
+      entryDigit.textContent = '-';
+      infoLine.textContent = 'Predict - | Last - | Gap -';
       addLog('⏹ Signal timer stopped', 'info');
-    }
-
-    function beginCountdown() {
-      if (!signalRunning) return;
-      signalPhase = 'ready';
-      signalCountdown = 15;
-      signalWindowTicks = [];
-      signalResultShown = false;
-      resultOverlay.classList.add('hidden');
-
-      // Get current prediction for the signal symbol
-      const st = state[signalSymbol];
-      signalPredictedDigit = st ? st.predicted : '-';
-      if (signalPredictedDigit === '-') {
-        addLog('⚠️ Not enough ticks to predict yet. Waiting for more data.', 'error');
-        // Wait and retry in 2s
-        setTimeout(() => { if (signalRunning) beginCountdown(); }, 2000);
-        return;
-      }
-
-      addLog(`🔔 Signal started for ${getDisplayName(signalSymbol)} | Predicted digit: ${signalPredictedDigit}`, 'info');
-
-      if (signalTimerInterval) clearInterval(signalTimerInterval);
-      signalTimerInterval = setInterval(() => {
-        if (!signalRunning) { clearInterval(signalTimerInterval); signalTimerInterval = null; return; }
-        signalCountdown--;
-        updateTimerUI();
-
-        if (signalCountdown <= 0) {
-          clearInterval(signalTimerInterval);
-          signalTimerInterval = null;
-          // Start trade window
-          enterTradeWindow();
-        }
-      }, 1000);
-
-      // Force initial UI update
-      updateTimerUI();
-    }
-
-    function updateTimerUI() {
-      const remaining = signalCountdown;
-      const total = 15;
-      const progress = ((total - remaining) / total) * 100;
-
-      if (signalPhase === 'ready') {
-        // READY phase: 15 down to 6
-        if (remaining >= 6) {
-          phaseTitle.textContent = '◉ SIGNAL FOUND - READY';
-          phaseTitle.style.color = '#ffcc33';
-          timerDisplay.textContent = String(remaining).padStart(2, '0') + ':00';
-          timerDisplay.style.color = '#7ec8e3';
-          timerDisplay.classList.remove('blink');
-          statusText.textContent = 'READY';
-          statusText.style.color = '#ffcc33';
-          progressFill.style.background = '#7ec8e3';
-          progressFill.style.width = progress + '%';
-          windowDots.textContent = '• • • • •';
-          windowInfo.textContent = `Ready in ${remaining}s`;
-          // No sound for ready phase (or very low)
-        } else if (remaining >= 1 && remaining <= 5) {
-          // GO TIME phase: 5 down to 1
-          signalPhase = 'go';
-          phaseTitle.textContent = '◉ GO TIME!';
-          phaseTitle.style.color = '#ff3b3b';
-          timerDisplay.textContent = String(remaining).padStart(2, '0') + ':00';
-          timerDisplay.style.color = '#ff3b3b';
-          timerDisplay.classList.add('blink');
-          statusText.textContent = 'GO TIME! ⚡';
-          statusText.style.color = '#ff3b3b';
-          progressFill.style.background = '#ff3b3b';
-          progressFill.style.width = progress + '%';
-          windowDots.textContent = '• • • • •';
-          windowInfo.textContent = `GO in ${remaining}s`;
-          // Beep each second
-          playBeep(900);
-        }
-      } else if (signalPhase === 'window') {
-        // Window phase: timer hidden, show dots
-        phaseTitle.textContent = '● TRADE WINDOW ACTIVE';
-        phaseTitle.style.color = '#60a5fa';
-        timerDisplay.textContent = '--';
-        timerDisplay.classList.remove('blink');
-        statusText.textContent = 'WINDOW OPEN';
-        statusText.style.color = '#60a5fa';
-        progressFill.style.width = '100%';
-        // Dots updated separately
-      } else if (signalPhase === 'result') {
-        // Result handled separately
-      }
-    }
-
-    function enterTradeWindow() {
-      if (!signalRunning) return;
-      signalPhase = 'window';
-      signalWindowTicks = [];
-      resultOverlay.classList.add('hidden');
-
-      phaseTitle.textContent = '● TRADE WINDOW ACTIVE';
-      phaseTitle.style.color = '#60a5fa';
-      timerDisplay.textContent = '--';
-      timerDisplay.classList.remove('blink');
-      statusText.textContent = 'WINDOW OPEN';
-      statusText.style.color = '#60a5fa';
-      progressFill.style.width = '100%';
-      windowDots.textContent = '• • • • •';
-      windowInfo.textContent = 'Waiting for 5 ticks…';
-
-      playDoubleBeep();
-      addLog(`🚪 Trade window opened for ${getDisplayName(signalSymbol)}. Waiting for 5 ticks.`, 'info');
-
-      // If ticks already coming, they'll fill the window via processTick
-    }
-
-    function updateWindowUI() {
-      const ticks = signalWindowTicks;
-      const dots = ticks.map(t => t.toString()).join(' ');
-      const empty = '•';
-      const fullDots = ticks.map(t => t).join(' ');
-      const remaining = 5 - ticks.length;
-      windowDots.textContent = ticks.length === 0 ? '• • • • •' : fullDots.padEnd(9, ' •');
-      // Show actual digits
-      let display = '';
-      for (let i = 0; i < 5; i++) {
-        if (i < ticks.length) display += ticks[i] + ' ';
-        else display += '• ';
-      }
-      windowDots.textContent = display.trim();
-      windowInfo.textContent = `Tick ${ticks.length}/5 got ${ticks.length>0?ticks.join(','):'…'} need ${5-ticks.length} more`;
-    }
-
-    function closeWindowAndShowResult() {
-      if (!signalRunning) return;
-      signalPhase = 'result';
-      clearInterval(signalTimerInterval);
-      signalTimerInterval = null;
-
-      const pred = signalPredictedDigit;
-      const ticks = signalWindowTicks;
-      const win = ticks.some(t => t === pred);
-
-      // Show result overlay
-      resultOverlay.classList.remove('hidden');
-      if (win) {
-        resultText.textContent = 'WIN ✓';
-        resultText.style.color = '#6ee7b7';
-        resultOverlay.style.border = '3px solid #6ee7b7';
-        resultOverlay.className = 'result-overlay win';
-        addLog(`✅ SIGNAL WIN! Predicted ${pred} appeared in ${ticks.join(',')}`, 'win');
-        playDoubleBeep();
-      } else {
-        resultText.textContent = 'LOSS ✕';
-        resultText.style.color = '#fca5a5';
-        resultOverlay.style.border = '3px solid #fca5a5';
-        resultOverlay.className = 'result-overlay loss';
-        addLog(`❌ SIGNAL LOSS! Predicted ${pred} did not appear in ${ticks.join(',')}`, 'loss');
-      }
-
-      // Start countdown to restart
-      let countdown = 3;
-      resultSub.textContent = `Continuing in ${countdown}s…`;
-      const resultInterval = setInterval(() => {
-        countdown--;
-        if (countdown <= 0) {
-          clearInterval(resultInterval);
-          // Restart cycle
-          resultOverlay.classList.add('hidden');
-          if (signalRunning) {
-            beginCountdown();
-          }
-        } else {
-          resultSub.textContent = `Continuing in ${countdown}s…`;
-        }
-      }, 1000);
-
-      // Update UI for result phase
-      phaseTitle.textContent = win ? '✅ WIN' : '❌ LOSS';
-      phaseTitle.style.color = win ? '#6ee7b7' : '#fca5a5';
-      timerDisplay.textContent = '--';
-      statusText.textContent = win ? 'WINNER' : 'LOSS';
-      progressFill.style.width = '100%';
-      progressFill.style.background = win ? '#6ee7b7' : '#fca5a5';
-      windowInfo.textContent = `Result: ${win ? 'WIN' : 'LOSS'} in 5 ticks`;
     }
 
     // ─── WebSocket ──────────────────────────────────────────────────
@@ -810,15 +914,6 @@
           globalTickCount++;
           tickCounterEl.textContent = `📡 ${globalTickCount} ticks`;
           processTick(sym, quote.toString(), digit);
-
-          // If we are in collecting phase, check threshold
-          if (sym === signalSymbol && signalRunning && signalPhase === 'collecting') {
-            const st = state[signalSymbol];
-            if (st && st.history.length >= COLLECT_THRESHOLD) {
-              // We have enough ticks, start countdown
-              beginCountdown();
-            }
-          }
         } catch (e) {
           console.warn('⚠️ Error parsing message:', e);
         }
@@ -948,9 +1043,6 @@
     setInterval(saveHistory, 10000);
     window.addEventListener('beforeunload', saveHistory);
     only1sCheck.dispatchEvent(new Event('change'));
-
-    // initial signal UI
-    updateCollectUI();
   </script>
 </body>
 </html>
