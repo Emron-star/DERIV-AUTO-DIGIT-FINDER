@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deriv Advanced Digit Finder</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0b0d12; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 12px; }
+    h1 { font-size: 20px; margin: 6px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    h2 { font-size: 15px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; }
+    .top-bar {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      background: #14181f; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px;
+      border: 1px solid #2a3344;
+    }
+    .top-bar select, .top-bar button, .top-bar label {
+      background: #1f2937; color: #e2e8f0; border: 1px solid #374151;
+      padding: 6px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    }
+    .top-bar button { transition: background .2s; }
+    .top-bar button.on { background: #065f46; border-color: #10b981; }
+    .top-bar button.danger { border-color: #b91c1c; color: #fca5a5; }
+    .top-bar button.danger:hover { background: #3b1a1a; }
+    .top-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    #status {
+      font-size: 13px; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px;
+      background: #1f2937; margin-left: auto;
+    }
+    #status.live { color: #6ee7b7; }
+    #status.connecting { color: #fbbf24; }
+    #status.error { color: #fca5a5; }
+    #tickCounter { font-size: 12px; color: #94a3b8; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: #14181f;
+      border: 1px solid #2a3344;
+      border-radius: 14px;
+      padding: 14px 14px 12px;
+      transition: border-color .2s, transform .15s, box-shadow .15s;
+    }
+    .card.flash { border-color: #10b981; box-shadow: 0 0 28px rgba(16,185,129,.5); transform: scale(1.02); }
+    .card.hidden { display: none; }
+    .card .price { font-family: monospace; font-size: 12px; color: #94a3b8; margin: 2px 0 6px; }
+    .digits { display: flex; justify-content: space-around; align-items: center; margin: 6px 0 8px; }
+    .digits .last { font-size: 40px; font-weight: 800; color: #60a5fa; line-height: 1; }
+    .digits .pred { font-size: 40px; font-weight: 800; color: #fbbf24; line-height: 1; }
+    .match { text-align: center; padding: 6px; border-radius: 8px; font-size: 13px; margin: 4px 0 6px; }
+    .match.win { background: #064e3b; color: #6ee7b7; }
+    .match.loss { background: #3b1a1a; color: #fca5a5; }
+    .stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #94a3b8; margin: 4px 0 6px; }
+    .stats span { background: #1f2937; padding: 2px 8px; border-radius: 12px; }
+    .stats .num { color: #e2e8f0; font-weight: 600; }
+    .bar { display: flex; gap: 3px; margin: 8px 0 4px; height: 32px; align-items: flex-end; }
+    .bar .col { flex: 1; min-width: 22px; background: #1f2937; border-radius: 4px 4px 0 0; position: relative; transition: height .2s; display: flex; flex-direction: column; align-items: center; font-size: 8px; color: #94a3b8; justify-content: flex-end; padding-bottom: 2px; }
+    .bar .col.active { background: #3b82f6; }
+    .bar .col.predict { background: #fbbf24; border: 1px solid #fbbf24; }
+    .bar .col .label { font-size: 7px; color: #6b7280; margin-top: 2px; }
+    .ticks { font-family: monospace; font-size: 10px; color: #6b7280; word-break: break-all; max-height: 48px; overflow-y: auto; background: #0b0d12; padding: 4px 6px; border-radius: 6px; margin-top: 4px; }
+    .log { background: #14181f; border: 1px solid #2a3344; border-radius: 10px; padding: 10px; margin-top: 14px; max-height: 160px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6; }
+    .log .entry { border-bottom: 1px solid #1f2937; padding: 2px 0; }
+    .log .entry.win { color: #6ee7b7; }
+    .log .entry.loss { color: #fca5a5; }
+    .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h1>📊 Deriv Advanced Digit Finder <span style="font-size:14px;font-weight:400;color:#94a3b8;">All Volatility + 1s</span></h1>
+  
+  <div class="top-bar">
+    <label>Method:
+      <select id="method">
+        <option value="overdue">Overdue (gap)</option>
+        <option value="hot">Hottest</option>
+        <option value="cold">Coldest</option>
+        <option value="balanced">Balanced</option>
+      </select>
+    </label>
+    <button id="soundBtn">🔇 Enable Sound</button>
+    <label><input type="checkbox" id="only1s"> Only 1s</label>
+    <label><input type="checkbox" id="pause"> ⏸ Pause</label>
+    <button id="reconnectBtn" class="danger">🔌 Reconnect</button>
+    <button id="clearBtn" class="danger">🗑 Clear</button>
+    <span id="status" class="connecting">● Connecting…</span>
+    <span id="tickCounter">📡 0 ticks</span>
+  </div>
+
+  <div id="grid" class="grid"></div>
+  <div class="log" id="log"></div>
+
+  <script>
+    // ─── config ───────────────────────────────────────────────────────
+    const SYMBOLS = [
+      { id: 'R_10', name: 'Vol 10' },
+      { id: 'R_25', name: 'Vol 25' },
+      { id: 'R_50', name: 'Vol 50' },
+      { id: 'R_75', name: 'Vol 75' },
+      { id: 'R_100', name: 'Vol 100' },
+      { id: 'R_10_1S', name: 'Vol 10 (1s)' },
+      { id: 'R_25_1S', name: 'Vol 25 (1s)' },
+      { id: 'R_50_1S', name: 'Vol 50 (1s)' },
+      { id: 'R_75_1S', name: 'Vol 75 (1s)' },
+      { id: 'R_100_1S', name: 'Vol 100 (1s)' }
+    ];
+    const MAX_HISTORY = 500;
+    const STORAGE_KEY = 'deriv_auto_history';
+    const DERIV_WS = 'wss://ws.derivws.com/websockets/v3?app_id=1089';
+
+    // ─── state ───────────────────────────────────────────────────────
+    const state = {};
+    SYMBOLS.forEach(s => {
+      state[s.id] = {
+        history: [], counter: Array(10).fill(0), gaps: Array(10).fill(0),
+        lastPrice: '-', lastDigit: '-', predicted: '-', lastPrediction: undefined,
+        wins: 0, losses: 0, streak: 0, bestStreak: 0, totalPredictions: 0
+      };
+    });
+
+    let soundEnabled = false, audioCtx = null;
+    let ws = null, reconnectAttempts = 0, paused = false;
+    const MAX_RECONNECT = 12;
+    let globalTickCount = 0;
+
+    // ─── DOM refs ────────────────────────────────────────────────────
+    const gridEl = document.getElementById('grid');
+    const logEl = document.getElementById('log');
+    const methodSelect = document.getElementById('method');
+    const soundBtn = document.getElementById('soundBtn');
+    const only1sCheck = document.getElementById('only1s');
+    const pauseCheck = document.getElementById('pause');
+    const clearBtn = document.getElementById('clearBtn');
+    const reconnectBtn = document.getElementById('reconnectBtn');
+    const statusEl = document.getElementById('status');
+    const tickCounterEl = document.getElementById('tickCounter');
+
+    // ─── storage helpers ────────────────────────────────────────────
+    function loadHistory() {
+      try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return; const data = JSON.parse(raw); SYMBOLS.forEach(s => { const id = s.id; if (data[id]) { state[id].history = data[id].slice(-MAX_HISTORY); state[id].counter = Array(10).fill(0); state[id].history.forEach(d => state[id].counter[d]++); } }); } catch (_) {}
+    }
+    function saveHistory() {
+      try { const data = {}; SYMBOLS.forEach(s => data[s.id] = state[s.id].history); localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (_) {}
+    }
+
+    // ─── audio ──────────────────────────────────────────────────────
+    function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    function playBeep(is1s) {
+      if (!soundEnabled || !audioCtx) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.frequency.value = is1s ? 880 : 660;
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.35);
+    }
+
+    // ─── prediction ──────────────────────────────────────────────────
+    function analyze(symId) {
+      const st = state[symId], h = st.history;
+      if (h.length < 20) return '-';
+      const method = methodSelect.value, c = st.counter;
+      for (let d = 0; d < 10; d++) { let g = 0; for (let i = h.length-1; i>=0; i--) { if (h[i]===d) break; g++; } st.gaps[d]=g; }
+      let best = 0;
+      if (method === 'overdue') { let max = st.gaps[0]; for (let d=1; d<10; d++) if (st.gaps[d] > max) { max = st.gaps[d]; best = d; } }
+      else if (method === 'hot') { let max = c[0]; for (let d=1; d<10; d++) if (c[d] > max) { max = c[d]; best = d; } }
+      else if (method === 'cold') { let min = c[0]; for (let d=1; d<10; d++) if (c[d] < min) { min = c[d]; best = d; } }
+      else { const t = h.length / 10; let bd = Math.abs(c[0]-t), best = 0; for (let d=1; d<10; d++) { const diff = Math.abs(c[d]-t); if (diff < bd) { bd = diff; best = d; } } }
+      return best;
+    }
+
+    // ─── rendering (batched) ──────────────────────────────────────
+    let pendingCards = new Set(), renderScheduled = false;
+    function scheduleRender(id) { pendingCards.add(id); if (!renderScheduled) { renderScheduled = true; requestAnimationFrame(() => { pendingCards.forEach(id => renderCard(id)); pendingCards.clear(); renderScheduled = false; }); } }
+
+    function renderCard(id) {
+      const st = state[id], card = document.getElementById('card-'+id); if (!card) return;
+      const pred = st.predicted, win = pred !== '-' && st.lastDigit === pred && st.history.length >= 20;
+      card.querySelector('.price').textContent = st.lastPrice + ' | ' + st.history.length + ' ticks';
+      card.querySelector('.last').textContent = st.lastDigit;
+      card.querySelector('.pred').textContent = pred;
+      const matchEl = card.querySelector('.match');
+      if (st.history.length < 20) { matchEl.textContent = '⏳ Collecting data…'; matchEl.className = 'match'; }
+      else { matchEl.textContent = win ? `✅ MATCH! Predicted ${pred} HIT` : `❌ Predict ${pred} | Last ${st.lastDigit}`; matchEl.className = 'match ' + (win ? 'win' : 'loss'); }
+
+      const total = st.totalPredictions, rate = total > 0 ? Math.round((st.wins/total)*100) : 0;
+      card.querySelector('.stats').innerHTML = `<span>Wins: <span class="num">${st.wins}</span></span><span>Losses: <span class="num">${st.losses}</span></span><span>Rate: <span class="num">${rate}%</span></span><span>Streak: <span class="num">${st.streak}</span></span><span>Best: <span class="num">${st.bestStreak}</span></span>`;
+      const gapEl = card.querySelector('.gap'); gapEl.textContent = pred !== '-' ? st.gaps[pred] + ' ticks' : '-';
+
+      const bar = card.querySelector('.bar'); bar.innerHTML = '';
+      const maxCount = Math.max(1, ...st.counter);
+      for (let d = 0; d < 10; d++) {
+        const col = document.createElement('div'); col.className = 'col';
+        const h = (st.counter[d]/maxCount)*28 + 4; col.style.height = h + 'px';
+        if (d === st.lastDigit) col.classList.add('active');
+        if (d === pred) col.classList.add('predict');
+        col.innerHTML = `<span>${st.counter[d]}</span><span class="label">${d}</span>`;
+        bar.appendChild(col);
+      }
+      card.querySelector('.ticks').textContent = st.history.slice(-60).join(' ');
+    }
+
+    function buildGrid() {
+      gridEl.innerHTML = '';
+      SYMBOLS.forEach(s => {
+        const card = document.createElement('div'); card.className = 'card'; card.id = 'card-'+s.id;
+        card.innerHTML = `<h2><span>${s.name}</span> <span style="font-size:11px;color:#6b7280;">${s.id}</span></h2><div class="price">-</div><div class="digits"><span class="last">-</span><span style="font-size:20px;color:#6b7280;">→</span><span class="pred">-</span></div><div class="match">Waiting…</div><div class="stats">-</div><div style="font-size:11px;color:#94a3b8;">Gap: <span class="gap">-</span></div><div class="bar"></div><div class="ticks"></div>`;
+        gridEl.appendChild(card);
+      });
+      SYMBOLS.forEach(s => renderCard(s.id));
+    }
+
+    function addLog(entry, isWin) {
+      const div = document.createElement('div'); div.className = 'entry ' + (isWin ? 'win' : 'loss'); div.textContent = entry;
+      logEl.prepend(div);
+      while (logEl.children.length > 100) logEl.removeChild(logEl.lastChild);
+    }
+
+    // ─── process tick ─────────────────────────────────────────────
+    function processTick(symId, quote, digit) {
+      if (paused) return;
+      const st = state[symId];
+      st.history.push(digit); if (st.history.length > MAX_HISTORY) st.history.shift();
+      st.lastPrice = quote; st.lastDigit = digit;
+      st.counter[digit] = (st.counter[digit] || 0) + 1;
+      const newPred = analyze(symId);
+      const oldPred = st.predicted;
+      st.predicted = newPred;
+
+      if (oldPred !== '-' && st.history.length >= 21 && st.lastPrediction !== undefined && st.lastPrediction !== '-') {
+        const win = digit === st.lastPrediction;
+        st.totalPredictions++;
+        if (win) { st.wins++; st.streak++; if (st.streak > st.bestStreak) st.bestStreak = st.streak; }
+        else { st.losses++; st.streak = 0; }
+        if (win) {
+          const only1s = only1sCheck.checked, is1s = symId.includes('1S');
+          if (!only1s || is1s) {
+            playBeep(is1s);
+            addLog(`✅ ${symId} | Predicted ${st.lastPrediction} → ${digit} HIT!`, true);
+            const card = document.getElementById('card-'+symId);
+            if (card) { card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 800); }
+            if (navigator.vibrate) navigator.vibrate([80,50,80]);
+          }
+        }
+        saveHistory();
+      }
+      st.lastPrediction = newPred;
+      scheduleRender(symId);
+    }
+
+    // ─── WebSocket ──────────────────────────────────────────────────
+    function connect() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      statusEl.className = 'connecting';
+      statusEl.textContent = '● Connecting…';
+      ws = new WebSocket(DERIV_WS);
+
+      ws.onopen = () => {
+        statusEl.className = 'live';
+        statusEl.textContent = '● Live';
+        reconnectAttempts = 0;
+        console.log('🔌 Connected to Deriv');
+        SYMBOLS.forEach(s => ws.send(JSON.stringify({ ticks: s.id, subscribe: 1 })));
+      };
+
+      ws.onmessage = (msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          if (!data.tick) return;
+          const sym = data.tick.symbol;
+          if (!state[sym]) return;
+          const quote = data.tick.quote;
+          if (quote === undefined || quote === null) return;
+          const digit = parseInt(quote.toString().slice(-1));
+          if (isNaN(digit)) return;
+
+          globalTickCount++;
+          tickCounterEl.textContent = `📡 ${globalTickCount} ticks`;
+
+          // Debug: uncomment to see raw ticks in console
+          // console.log(`📊 ${sym} → ${quote} (${digit})`);
+
+          processTick(sym, quote.toString(), digit);
+        } catch (e) { /* ignore */ }
+      };
+
+      ws.onclose = () => {
+        statusEl.className = 'error';
+        statusEl.textContent = '● Disconnected';
+        if (reconnectAttempts < MAX_RECONNECT) {
+          reconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+          console.warn(`⏳ Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts})`);
+          setTimeout(connect, delay);
+        } else {
+          statusEl.textContent = '⚠️ Failed – refresh page';
+        }
+      };
+
+      ws.onerror = () => { /* triggers onclose */ };
+    }
+
+    // ─── clear history ─────────────────────────────────────────────
+    function clearHistory() {
+      if (!confirm('Clear all history and stats?')) return;
+      SYMBOLS.forEach(s => {
+        const st = state[s.id];
+        st.history = []; st.counter = Array(10).fill(0); st.gaps = Array(10).fill(0);
+        st.lastPrice = '-'; st.lastDigit = '-'; st.predicted = '-'; st.lastPrediction = undefined;
+        st.wins = 0; st.losses = 0; st.streak = 0; st.bestStreak = 0; st.totalPredictions = 0;
+      });
+      localStorage.removeItem(STORAGE_KEY);
+      logEl.innerHTML = '';
+      SYMBOLS.forEach(s => renderCard(s.id));
+      statusEl.textContent = '● Cleared';
+      setTimeout(() => statusEl.textContent = '● Live', 1000);
+    }
+
+    // ─── event listeners ──────────────────────────────────────────
+    methodSelect.addEventListener('change', () => {
+      SYMBOLS.forEach(s => { if (state[s.id].history.length >= 20) { state[s.id].predicted = analyze(s.id); scheduleRender(s.id); } });
+    });
+
+    soundBtn.addEventListener('click', () => {
+      if (!audioCtx) initAudio();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      soundEnabled = !soundEnabled;
+      soundBtn.textContent = soundEnabled ? '🔔 Sound ON' : '🔇 Enable Sound';
+      soundBtn.classList.toggle('on', soundEnabled);
+      if (soundEnabled) playBeep(false);
+    });
+
+    pauseCheck.addEventListener('change', () => { paused = pauseCheck.checked; statusEl.textContent = paused ? '⏸ Paused' : '● Live'; statusEl.className = paused ? '' : 'live'; });
+    clearBtn.addEventListener('click', clearHistory);
+    reconnectBtn.addEventListener('click', () => { if (ws) { ws.close(); } connect(); });
+
+    only1sCheck.addEventListener('change', () => {
+      SYMBOLS.forEach(s => { const card = document.getElementById('card-'+s.id); if (!card) return; const is1s = s.id.includes('1S'); if (only1sCheck.checked && !is1s) card.classList.add('hidden'); else card.classList.remove('hidden'); });
+    });
+
+    // ─── start ──────────────────────────────────────────────────────
+    loadHistory();
+    buildGrid();
+    SYMBOLS.forEach(s => { if (state[s.id].history.length >= 20) { state[s.id].predicted = analyze(s.id); scheduleRender(s.id); } });
+    connect();
+    setInterval(saveHistory, 10000);
+    window.addEventListener('beforeunload', saveHistory);
+    only1sCheck.dispatchEvent(new Event('change'));
+  </script>
+</body>
+</html>
