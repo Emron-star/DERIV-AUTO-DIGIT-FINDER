@@ -94,7 +94,6 @@
     .settings button:hover { background: #2d3a4f; }
     .settings .hint { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
     .settings .error-msg { color: #fca5a5; font-size: 13px; margin-top: 6px; }
-    .settings .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
   </style>
 </head>
 <body>
@@ -164,7 +163,13 @@
       'R_25_1S': 'Volatility 25 (1s)',
       'R_50_1S': 'Volatility 50 (1s)',
       'R_75_1S': 'Volatility 75 (1s)',
-      'R_100_1S': 'Volatility 100 (1s)'
+      'R_100_1S': 'Volatility 100 (1s)',
+      // Additional cTrader symbols (if you want to try them)
+      'R_15_1S': 'Volatility 15 (1s)',
+      'R_30_1S': 'Volatility 30 (1s)',
+      'R_90_1S': 'Volatility 90 (1s)',
+      'R_150_1S': 'Volatility 150 (1s)',
+      'R_250_1S': 'Volatility 250 (1s)'
     };
 
     const DEFAULT_SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', 'R_10_1S', 'R_25_1S', 'R_50_1S', 'R_75_1S', 'R_100_1S'];
@@ -179,7 +184,6 @@
 
     function initSymbols(symList) {
       symbols = symList.map(s => s.trim()).filter(s => s);
-      // Reset state for new symbols
       symbols.forEach(sym => {
         if (!state[sym]) {
           state[sym] = {
@@ -395,20 +399,18 @@
         settingsError.style.display = 'block';
         return;
       }
-      // Update symbols and state
       initSymbols(symList);
-      // Rebuild grid
       buildGrid();
-      // Load history for new symbols
       loadHistory();
 
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close();
       }
 
-      const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`;
+      // 🔥 USE THE CORRECT PUBLIC WEBSOCKET ENDPOINT
+      const wsUrl = `wss://api.derivws.com/trading/v1/options/ws/public?app_id=${appId}`;
       console.log(`🔗 Connecting to ${wsUrl}`);
-      addLog(`🔗 Connecting to ${wsUrl}`, 'info');
+      addLog(`🔗 Connecting to public WebSocket (app_id: ${appId})`, 'info');
       statusEl.className = 'connecting';
       statusEl.textContent = '● Connecting…';
       ws = new WebSocket(wsUrl);
@@ -420,52 +422,20 @@
         statusEl.textContent = '● Live';
         reconnectAttempts = 0;
 
-        const token = apiTokenInput.value.trim();
-        if (token) {
-          console.log('🔑 Sending authorize request...');
-          ws.send(JSON.stringify({ authorize: token }));
-          addLog('🔑 Sending authorization request…', 'info');
-        } else {
-          console.log('📡 No token – subscribing to public ticks');
-          symbols.forEach(sym => {
-            const req = { ticks: sym, subscribe: 1 };
-            console.log(`📤 Sending subscribe: ${JSON.stringify(req)}`);
-            ws.send(JSON.stringify(req));
-          });
-          addLog(`📡 Subscribed to ${symbols.length} symbols (no auth)`, 'info');
-        }
+        // Subscribe to symbols
+        console.log('📡 Subscribing to symbols:', symbols);
+        symbols.forEach(sym => {
+          const req = { ticks: sym, subscribe: 1 };
+          console.log(`📤 Sending subscribe: ${JSON.stringify(req)}`);
+          ws.send(JSON.stringify(req));
+        });
+        addLog(`📡 Subscribed to ${symbols.length} symbols`, 'info');
       };
 
       ws.onmessage = (msg) => {
         try {
           const data = JSON.parse(msg.data);
           console.log('📨 Message received:', data);
-
-          // Handle authorization response
-          if (data.authorize) {
-            if (data.error) {
-              const errMsg = data.error.message || 'Unknown auth error';
-              console.error('❌ Auth error:', errMsg);
-              addLog(`❌ Authorization failed: ${errMsg}`, 'error');
-              settingsError.textContent = `Auth error: ${errMsg}`;
-              settingsError.style.display = 'block';
-              statusEl.className = 'error';
-              statusEl.textContent = '● Auth Failed';
-              return;
-            } else {
-              isAuthorized = true;
-              console.log('✅ Authorized as', data.authorize.loginid);
-              addLog(`✅ Authorized as ${data.authorize.loginid || 'user'}`, 'win');
-              // Subscribe to ticks after auth
-              symbols.forEach(sym => {
-                const req = { ticks: sym, subscribe: 1 };
-                console.log(`📤 Sending subscribe: ${JSON.stringify(req)}`);
-                ws.send(JSON.stringify(req));
-              });
-              addLog(`📡 Subscribed to ${symbols.length} symbols after auth`, 'info');
-            }
-            return;
-          }
 
           // Handle server errors
           if (data.error) {
@@ -600,7 +570,6 @@
 
     // ─── start ──────────────────────────────────────────────────────
     loadCredentials();
-    // Load symbols from saved credentials if any
     const savedCred = localStorage.getItem(CRED_KEY);
     if (savedCred) {
       try {
