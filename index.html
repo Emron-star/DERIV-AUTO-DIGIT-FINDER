@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Deriv Digit Finder + Signal Timer</title>
+  <title>Multi‑Market Signal Scanner</title>
   <style>
     * { box-sizing: border-box; }
     body { background: #0b0d12; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 12px; }
     h1 { font-size: 20px; margin: 6px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    h2 { font-size: 15px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; }
     .top-bar {
       display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
       background: #14181f; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px;
@@ -34,34 +33,87 @@
     #tickCounter { font-size: 12px; color: #94a3b8; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 14px;
     }
     .card {
       background: #14181f;
       border: 1px solid #2a3344;
       border-radius: 14px;
-      padding: 14px 14px 12px;
+      padding: 14px 12px;
       transition: border-color .2s, transform .15s, box-shadow .15s;
+      position: relative;
     }
-    .card.flash { border-color: #10b981; box-shadow: 0 0 28px rgba(16,185,129,.5); transform: scale(1.02); }
-    .card.hidden { display: none; }
-    .card .price { font-family: monospace; font-size: 12px; color: #94a3b8; margin: 2px 0 6px; }
-    .digits { display: flex; justify-content: space-around; align-items: center; margin: 6px 0 8px; }
-    .digits .last { font-size: 40px; font-weight: 800; color: #60a5fa; line-height: 1; }
-    .digits .pred { font-size: 40px; font-weight: 800; color: #fbbf24; line-height: 1; }
-    .match { text-align: center; padding: 6px; border-radius: 8px; font-size: 13px; margin: 4px 0 6px; }
-    .match.win { background: #064e3b; color: #6ee7b7; }
-    .match.loss { background: #3b1a1a; color: #fca5a5; }
-    .stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #94a3b8; margin: 4px 0 6px; }
-    .stats span { background: #1f2937; padding: 2px 8px; border-radius: 12px; }
-    .stats .num { color: #e2e8f0; font-weight: 600; }
-    .bar { display: flex; gap: 3px; margin: 8px 0 4px; height: 32px; align-items: flex-end; }
-    .bar .col { flex: 1; min-width: 22px; background: #1f2937; border-radius: 4px 4px 0 0; position: relative; transition: height .2s; display: flex; flex-direction: column; align-items: center; font-size: 8px; color: #94a3b8; justify-content: flex-end; padding-bottom: 2px; }
-    .bar .col.active { background: #3b82f6; }
-    .bar .col.predict { background: #fbbf24; border: 1px solid #fbbf24; }
-    .bar .col .label { font-size: 7px; color: #6b7280; margin-top: 2px; }
-    .ticks { font-family: monospace; font-size: 10px; color: #6b7280; word-break: break-all; max-height: 48px; overflow-y: auto; background: #0b0d12; padding: 4px 6px; border-radius: 6px; margin-top: 4px; }
+    .card .title {
+      font-weight: 600; font-size: 15px; display: flex; justify-content: space-between;
+    }
+    .card .price { font-family: monospace; font-size: 12px; color: #94a3b8; margin: 2px 0 4px; }
+    .card .digits { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; }
+    .card .digits .last { font-size: 32px; font-weight: 800; color: #60a5fa; }
+    .card .digits .pred { font-size: 32px; font-weight: 800; color: #fbbf24; }
+    .card .info { font-size: 12px; color: #94a3b8; }
+    .card .dots { font-size: 20px; letter-spacing: 6px; margin: 4px 0; }
+    .card .result { text-align: center; padding: 4px; border-radius: 6px; font-weight: 600; }
+    .card .result.win { background: #064e3b; color: #6ee7b7; }
+    .card .result.loss { background: #3b1a1a; color: #fca5a5; }
+    .card .result.pending { background: #1f2937; color: #94a3b8; }
+    .card.win { border-color: #10b981; }
+    .card.loss { border-color: #f87171; }
+    .signal-panel {
+      background: #14181f; border: 1px solid #2a3344; border-radius: 14px;
+      padding: 16px; margin-bottom: 14px; text-align: center;
+      position: relative;
+      min-height: 120px;
+    }
+    .signal-panel .phase-title {
+      font-size: 22px; font-weight: 700; margin: 4px 0;
+      transition: color 0.2s;
+    }
+    .signal-panel .timer-display {
+      font-size: 56px; font-weight: 800; font-family: monospace;
+      letter-spacing: 4px; margin: 4px 0;
+      transition: color 0.2s;
+    }
+    .signal-panel .timer-display.blink {
+      animation: blink 0.5s infinite alternate;
+    }
+    @keyframes blink { 0% { opacity: 1; } 100% { opacity: 0.4; } }
+    .signal-panel .status-text {
+      font-size: 16px; font-weight: 600; margin: 2px 0;
+    }
+    .signal-panel .progress-bar {
+      width: 100%; height: 6px; background: #1f2937; border-radius: 4px;
+      margin: 6px 0; overflow: hidden;
+    }
+    .signal-panel .progress-bar .fill {
+      height: 100%; background: #7ec8e3; width: 0%; border-radius: 4px;
+      transition: width 0.3s linear;
+    }
+    .signal-panel .summary {
+      font-size: 14px; color: #94a3b8; margin-top: 6px;
+      max-height: 60px; overflow-y: auto;
+    }
+    .settings {
+      background: #14181f; border: 1px solid #2a3344; border-radius: 12px;
+      padding: 14px; margin-bottom: 14px;
+    }
+    .settings .row {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      margin-bottom: 6px;
+    }
+    .settings label { font-size: 13px; color: #94a3b8; white-space: nowrap; }
+    .settings input, .settings select {
+      background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
+      padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; min-width: 120px;
+    }
+    .settings button {
+      background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer;
+      transition: .15s;
+    }
+    .settings button:hover { background: #2d3a4f; }
+    .settings .hint { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
+    .settings .error-msg { color: #fca5a5; font-size: 13px; margin-top: 6px; }
     .log {
       background: #14181f; border: 1px solid #2a3344; border-radius: 10px;
       padding: 10px; margin-top: 14px; max-height: 200px;
@@ -72,204 +124,37 @@
     .log .entry.loss { color: #fca5a5; }
     .log .entry.error { color: #fca5a5; background: #3b1a1a; padding: 2px 6px; border-radius: 4px; }
     .log .entry.info { color: #93c5fd; }
-
-    /* Signal Panel */
-    .signal-panel {
-      background: #14181f; border: 1px solid #2a3344; border-radius: 14px;
-      padding: 16px; margin-bottom: 14px; text-align: center;
-      position: relative;
-      min-height: 200px;
-    }
-    .signal-panel .phase-title {
-      font-size: 22px; font-weight: 700; margin: 4px 0;
-      transition: color 0.2s;
-    }
-    .signal-panel .timer-display {
-      font-size: 64px; font-weight: 800; font-family: monospace;
-      letter-spacing: 4px; margin: 6px 0;
-      transition: color 0.2s;
-    }
-    .signal-panel .timer-display.blink {
-      animation: blink 0.5s infinite alternate;
-    }
-    @keyframes blink { 0% { opacity: 1; } 100% { opacity: 0.4; } }
-    .signal-panel .status-text {
-      font-size: 18px; font-weight: 600; margin: 4px 0;
-    }
-    .signal-panel .progress-bar {
-      width: 100%; height: 6px; background: #1f2937; border-radius: 4px;
-      margin: 8px 0; overflow: hidden;
-    }
-    .signal-panel .progress-bar .fill {
-      height: 100%; background: #7ec8e3; width: 0%; border-radius: 4px;
-      transition: width 0.3s linear;
-    }
-    .signal-panel .predict-wrap {
-      display: flex; justify-content: center; gap: 40px; margin: 12px 0;
-    }
-    .signal-panel .box {
-      text-align: center; padding: 8px 16px; border-radius: 12px;
-      background: #1f2937; min-width: 120px;
-    }
-    .signal-panel .box .label {
-      font-size: 14px; color: #94a3b8; display: block;
-    }
-    .signal-panel .box .digit {
-      font-size: 52px; font-weight: 800; line-height: 1.2;
-    }
-    .signal-panel .box.pred .digit { color: #fbbf24; }
-    .signal-panel .box.entry .digit { color: #60a5fa; }
-    .signal-panel .info-line {
-      font-size: 14px; color: #94a3b8; margin: 4px 0;
-    }
-    .signal-panel .window-dots {
-      font-size: 28px; letter-spacing: 10px; margin: 8px 0;
-    }
-    .signal-panel .window-info {
-      font-size: 14px; color: #94a3b8;
-    }
-    .signal-panel .trade-now-banner {
-      display: none;
-      font-size: 28px; font-weight: 800; color: #00ff88;
-      background: rgba(0,255,136,0.1); padding: 10px; border-radius: 12px;
-      border: 2px solid #00ff88; animation: pulse 1s infinite;
-      margin: 8px 0;
-    }
-    .signal-panel .trade-now-banner.show { display: block; }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-
-    .signal-panel .result-overlay {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      border-radius: 14px; display: flex; flex-direction: column;
-      justify-content: center; align-items: center;
-      background: rgba(0,0,0,0.85); font-size: 48px; font-weight: 800;
-      backdrop-filter: blur(4px);
-      transition: opacity 0.3s;
-    }
-    .signal-panel .result-overlay.hidden { display: none; }
-    .result-overlay.win { color: #6ee7b7; border: 3px solid #6ee7b7; }
-    .result-overlay.loss { color: #fca5a5; border: 3px solid #fca5a5; }
-    .result-overlay .sub { font-size: 18px; font-weight: 400; margin-top: 8px; }
-
-    /* Settings */
-    .settings {
-      background: #14181f; border: 1px solid #2a3344; border-radius: 12px;
-      padding: 14px; margin-bottom: 14px;
-    }
-    .settings .row {
-      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-      margin-bottom: 6px;
-    }
-    .settings label { font-size: 13px; color: #94a3b8; white-space: nowrap; }
-    .settings input, .settings textarea, .settings select {
-      background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
-      padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; min-width: 120px;
-    }
-    .settings textarea { min-height: 40px; font-family: monospace; resize: vertical; }
-    .settings button {
-      background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
-      padding: 6px 14px; border-radius: 6px; cursor: pointer;
-      transition: .15s;
-    }
-    .settings button:hover { background: #2d3a4f; }
-    .settings .hint { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
-    .settings .error-msg { color: #fca5a5; font-size: 13px; margin-top: 6px; }
   </style>
 </head>
 <body>
-  <h1>📊 Deriv Digit Finder + Signal Timer</h1>
+  <h1>📊 Multi‑Market Signal Scanner <span style="font-size:14px;font-weight:400;color:#94a3b8;">All Volatility + 1s</span></h1>
 
-  <!-- Settings -->
-  <div class="settings" id="settingsPanel">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-      <span style="font-weight:600;">🔐 API Credentials</span>
-      <button id="toggleSettings" style="background:transparent; border:none; color:#94a3b8; cursor:pointer;">▼</button>
+  <div class="settings">
+    <div class="row">
+      <label>App ID:</label>
+      <input type="text" id="appIdInput" placeholder="e.g. 1089" value="1089" />
+      <label>API Token (optional):</label>
+      <input type="password" id="apiTokenInput" placeholder="Paste token for OAuth" />
+      <button id="saveSettingsBtn">Save & Connect</button>
+      <button id="clearSettingsBtn" class="danger">Clear</button>
     </div>
-    <div id="settingsBody">
-      <div class="row">
-        <label>App ID:</label>
-        <input type="text" id="appIdInput" placeholder="e.g. 1089" value="1089" />
-        <label>API Token (optional):</label>
-        <input type="password" id="apiTokenInput" placeholder="Paste token for OAuth" />
-        <button id="saveSettingsBtn">Save & Connect</button>
-        <button id="clearSettingsBtn" class="danger">Clear</button>
-      </div>
-      <div class="row">
-        <label>Symbols (comma separated):</label>
-        <textarea id="symbolsInput" rows="2">R_10, R_25, R_50, R_75, R_100, R_10_1S, R_25_1S, R_50_1S, R_75_1S, R_100_1S</textarea>
-        <button id="loadDefaultSymbolsBtn" style="background:#1f2937; border:1px solid #374151; color:#e2e8f0; padding:6px 12px; border-radius:6px; cursor:pointer;">↺ Reset Defaults</button>
-      </div>
-      <div class="row">
-        <label>Signal Symbol:</label>
-        <select id="signalSymbolSelect">
-          <option value="R_75_1S">Volatility 75 (1s)</option>
-          <option value="R_75">Volatility 75</option>
-          <option value="R_100_1S">Volatility 100 (1s)</option>
-          <option value="R_100">Volatility 100</option>
-          <option value="R_50_1S">Volatility 50 (1s)</option>
-          <option value="R_50">Volatility 50</option>
-        </select>
-        <button id="startSignalBtn" style="background:#065f46; border-color:#10b981;">▶ Start Signal</button>
-        <button id="stopSignalBtn" class="danger">⏹ Stop</button>
-      </div>
-      <div class="hint">
-        💡 For public data, use App ID <code>1089</code> with no token. The signal timer uses the selected symbol's prediction.
-      </div>
-      <div id="settingsError" class="error-msg" style="display:none;"></div>
+    <div class="row">
+      <button id="startSignalBtn" style="background:#065f46; border-color:#10b981;">▶ Start Signal</button>
+      <button id="stopSignalBtn" class="danger">⏹ Stop</button>
+      <span id="status" class="connecting">● Connecting…</span>
+      <span id="tickCounter">📡 0 ticks</span>
     </div>
-  </div>
-
-  <!-- Top Bar -->
-  <div class="top-bar">
-    <label>Method:
-      <select id="method">
-        <option value="overdue">Overdue (gap)</option>
-        <option value="hot">Hottest</option>
-        <option value="cold">Coldest</option>
-        <option value="balanced">Balanced</option>
-      </select>
-    </label>
-    <button id="soundBtn">🔇 Enable Sound</button>
-    <label><input type="checkbox" id="only1s"> Only 1s</label>
-    <label><input type="checkbox" id="pause"> ⏸ Pause</label>
-    <button id="reconnectBtn" class="danger">🔌 Reconnect</button>
-    <button id="clearBtn" class="danger">🗑 Clear</button>
-    <span id="status" class="connecting">● Connecting…</span>
-    <span id="tickCounter">📡 0 ticks</span>
+    <div class="hint">💡 For public data, use App ID <code>1089</code> with no token. All 10 Volatility markets will be scanned.</div>
+    <div id="settingsError" class="error-msg" style="display:none;"></div>
   </div>
 
   <!-- Signal Panel -->
   <div class="signal-panel" id="signalPanel">
-    <div class="phase-title" id="phaseTitle">⏳ SIGNAL IDLE</div>
+    <div class="phase-title" id="phaseTitle">⏳ IDLE</div>
     <div class="timer-display" id="timerDisplay">--</div>
     <div class="status-text" id="statusText">Press Start to begin</div>
     <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
-
-    <!-- PREDICTED & ENTRY boxes -->
-    <div class="predict-wrap">
-      <div class="box pred">
-        <span class="label">PREDICTED</span>
-        <span class="digit" id="predDigit">-</span>
-      </div>
-      <div class="box entry">
-        <span class="label">ENTRY</span>
-        <span class="digit" id="entryDigit">-</span>
-      </div>
-    </div>
-    <div class="info-line" id="infoLine">Predict - | Last - | Gap -</div>
-
-    <!-- Trade Now Banner -->
-    <div class="trade-now-banner" id="tradeNowBanner">⚡ TRADE NOW! [X] MATCH ⚡</div>
-
-    <!-- Window dots -->
-    <div class="window-dots" id="windowDots">• • • • •</div>
-    <div class="window-info" id="windowInfo">Waiting for ticks…</div>
-
-    <!-- Result Overlay -->
-    <div class="result-overlay hidden" id="resultOverlay">
-      <div id="resultText">WIN ✓</div>
-      <div class="sub" id="resultSub">Continuing in 3s…</div>
-    </div>
+    <div class="summary" id="summary"></div>
   </div>
 
   <!-- Grid -->
@@ -277,133 +162,69 @@
   <div class="log" id="log"></div>
 
   <script>
-    // ─── CONFIG ───────────────────────────────────────────────────────
+    // ─── CONSTANTS ────────────────────────────────────────────────────
+    const SYMBOLS = [
+      { id: 'R_10', name: 'Volatility 10' },
+      { id: 'R_25', name: 'Volatility 25' },
+      { id: 'R_50', name: 'Volatility 50' },
+      { id: 'R_75', name: 'Volatility 75' },
+      { id: 'R_100', name: 'Volatility 100' },
+      { id: 'R_10_1S', name: 'Volatility 10 (1s)' },
+      { id: 'R_25_1S', name: 'Volatility 25 (1s)' },
+      { id: 'R_50_1S', name: 'Volatility 50 (1s)' },
+      { id: 'R_75_1S', name: 'Volatility 75 (1s)' },
+      { id: 'R_100_1S', name: 'Volatility 100 (1s)' }
+    ];
     const MAX_HISTORY = 500;
-    const STORAGE_KEY = 'deriv_auto_history';
-    const CRED_KEY = 'deriv_creds';
+    const COLLECT_THRESHOLD = 60;  // ticks needed before starting timer
 
-    const SYMBOL_DEFS = {
-      'R_10': 'Volatility 10',
-      'R_25': 'Volatility 25',
-      'R_50': 'Volatility 50',
-      'R_75': 'Volatility 75',
-      'R_100': 'Volatility 100',
-      'R_10_1S': 'Volatility 10 (1s)',
-      'R_25_1S': 'Volatility 25 (1s)',
-      'R_50_1S': 'Volatility 50 (1s)',
-      'R_75_1S': 'Volatility 75 (1s)',
-      'R_100_1S': 'Volatility 100 (1s)'
-    };
-    const DEFAULT_SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', 'R_10_1S', 'R_25_1S', 'R_50_1S', 'R_75_1S', 'R_100_1S'];
+    // ─── STATE ──────────────────────────────────────────────────────
+    const marketData = {};
+    SYMBOLS.forEach(s => {
+      marketData[s.id] = {
+        history: [],
+        gaps: Array(10).fill(0),
+        counts: Array(10).fill(0),
+        lastPrice: '-',
+        lastDigit: '-',
+        predicted: '-',
+        windowTicks: [],
+        windowOpen: false,
+        windowResolved: false,
+        win: false
+      };
+    });
 
-    function getDisplayName(ticker) { return SYMBOL_DEFS[ticker] || ticker; }
-
-    // ─── STATE ───────────────────────────────────────────────────────
-    let symbols = [];
-    const state = {};
-    function initSymbols(symList) {
-      symbols = symList.map(s => s.trim()).filter(s => s);
-      symbols.forEach(sym => {
-        if (!state[sym]) {
-          state[sym] = {
-            history: [], counter: Array(10).fill(0), gaps: Array(10).fill(0),
-            lastPrice: '-', lastDigit: '-', predicted: '-', lastPrediction: undefined,
-            wins: 0, losses: 0, streak: 0, bestStreak: 0, totalPredictions: 0
-          };
-        }
-      });
-    }
-    initSymbols(DEFAULT_SYMBOLS);
-
-    let soundEnabled = false, audioCtx = null;
     let ws = null, reconnectAttempts = 0, paused = false;
     const MAX_RECONNECT = 12;
     let globalTickCount = 0;
-
-    // ─── Signal Timer State ────────────────────────────────────────
+    let soundEnabled = false, audioCtx = null;
     let signalRunning = false;
-    let signalSymbol = 'R_75_1S';
     let signalPhase = 'idle'; // idle, collecting, ready, go, window, result
-    let signalCountdown = 0;
+    let signalCountdown = 15;
     let signalTimerInterval = null;
-    let signalWindowTicks = [];
-    let signalPredictedDigit = '-';
-    let signalPredictionData = null; // {pred, gaps, counts, maxGap}
-    let signalCollectCount = 0;
-    const COLLECT_THRESHOLD = 50;
+    let allMarketsReady = false;
+    let windowActive = false;
 
-    // ─── DOM refs ────────────────────────────────────────────────────
+    // ─── DOM REFS ──────────────────────────────────────────────────
     const gridEl = document.getElementById('grid');
     const logEl = document.getElementById('log');
-    const methodSelect = document.getElementById('method');
-    const soundBtn = document.getElementById('soundBtn');
-    const only1sCheck = document.getElementById('only1s');
-    const pauseCheck = document.getElementById('pause');
-    const clearBtn = document.getElementById('clearBtn');
-    const reconnectBtn = document.getElementById('reconnectBtn');
-    const statusEl = document.getElementById('status');
-    const tickCounterEl = document.getElementById('tickCounter');
     const appIdInput = document.getElementById('appIdInput');
     const apiTokenInput = document.getElementById('apiTokenInput');
-    const symbolsInput = document.getElementById('symbolsInput');
-    const signalSymbolSelect = document.getElementById('signalSymbolSelect');
-    const startSignalBtn = document.getElementById('startSignalBtn');
-    const stopSignalBtn = document.getElementById('stopSignalBtn');
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
     const clearSettingsBtn = document.getElementById('clearSettingsBtn');
-    const loadDefaultSymbolsBtn = document.getElementById('loadDefaultSymbolsBtn');
+    const startSignalBtn = document.getElementById('startSignalBtn');
+    const stopSignalBtn = document.getElementById('stopSignalBtn');
+    const statusEl = document.getElementById('status');
+    const tickCounterEl = document.getElementById('tickCounter');
     const settingsError = document.getElementById('settingsError');
-    const toggleSettingsBtn = document.getElementById('toggleSettings');
-    const settingsBody = document.getElementById('settingsBody');
-
-    // Signal UI
     const phaseTitle = document.getElementById('phaseTitle');
     const timerDisplay = document.getElementById('timerDisplay');
     const statusText = document.getElementById('statusText');
     const progressFill = document.getElementById('progressFill');
-    const predDigit = document.getElementById('predDigit');
-    const entryDigit = document.getElementById('entryDigit');
-    const infoLine = document.getElementById('infoLine');
-    const tradeNowBanner = document.getElementById('tradeNowBanner');
-    const windowDots = document.getElementById('windowDots');
-    const windowInfo = document.getElementById('windowInfo');
-    const resultOverlay = document.getElementById('resultOverlay');
-    const resultText = document.getElementById('resultText');
-    const resultSub = document.getElementById('resultSub');
+    const summaryEl = document.getElementById('summary');
 
-    // ─── load/save credentials ──────────────────────────────────────
-    function loadCredentials() {
-      try {
-        const raw = localStorage.getItem(CRED_KEY);
-        if (raw) {
-          const cred = JSON.parse(raw);
-          if (cred.appId) appIdInput.value = cred.appId;
-          if (cred.token) apiTokenInput.value = cred.token;
-          if (cred.symbols) symbolsInput.value = cred.symbols;
-          if (cred.signalSymbol) signalSymbolSelect.value = cred.signalSymbol;
-        }
-      } catch (_) {}
-    }
-    function saveCredentials(appId, token, symStr, sigSym) {
-      try {
-        localStorage.setItem(CRED_KEY, JSON.stringify({ appId, token, symbols: symStr, signalSymbol: sigSym }));
-      } catch (_) {}
-    }
-    function clearCredentials() {
-      localStorage.removeItem(CRED_KEY);
-      appIdInput.value = '';
-      apiTokenInput.value = '';
-    }
-
-    // ─── history ──────────────────────────────────────────────────
-    function loadHistory() {
-      try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return; const data = JSON.parse(raw); symbols.forEach(sym => { if (data[sym]) { state[sym].history = data[sym].slice(-MAX_HISTORY); state[sym].counter = Array(10).fill(0); state[sym].history.forEach(d => state[sym].counter[d]++); } }); } catch (_) {}
-    }
-    function saveHistory() {
-      try { const data = {}; symbols.forEach(sym => data[sym] = state[sym].history); localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (_) {}
-    }
-
-    // ─── audio ──────────────────────────────────────────────────────
+    // ─── AUDIO ──────────────────────────────────────────────────────
     function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
     function playBeep(freq, duration = 0.12) {
       if (!soundEnabled || !audioCtx) return;
@@ -422,429 +243,438 @@
       setTimeout(() => playBeep(1200, 0.35), 400);
     }
 
-    // ─── prediction (calcPrediction) ──────────────────────────────
-    function calcPrediction(sym) {
-      const st = state[sym];
-      if (!st || st.history.length < 80) return null;
-      const h = st.history;
-      // last 100 for counts
-      const last100 = h.slice(-100);
+    // ─── PREDICTION LOGIC (per market) ────────────────────────────
+    function computePrediction(sym) {
+      const md = marketData[sym];
+      if (!md || md.history.length < 20) return null;
+      const h = md.history;
+      // Update counts
       const counts = Array(10).fill(0);
-      last100.forEach(d => counts[d]++);
-      // gaps from the end
+      h.forEach(d => counts[d]++);
+      md.counts = counts;
+      // Compute gaps: for each digit, distance from end to last occurrence; if never found, gap = history.length
       const gaps = Array(10).fill(0);
       for (let d = 0; d < 10; d++) {
         let g = 0;
+        let found = false;
         for (let i = h.length - 1; i >= 0; i--) {
-          if (h[i] === d) break;
+          if (h[i] === d) { found = true; break; }
           g++;
         }
-        gaps[d] = g;
+        gaps[d] = found ? g : h.length;
       }
-      // pick max gap (most overdue)
+      md.gaps = gaps;
+      // Pick digit with maximum gap; if tie, pick the one with smallest count (rarest)
       let maxGap = -1;
-      let pred = 0;
+      let bestDigits = [];
       for (let d = 0; d < 10; d++) {
         if (gaps[d] > maxGap) {
           maxGap = gaps[d];
-          pred = d;
+          bestDigits = [d];
+        } else if (gaps[d] === maxGap) {
+          bestDigits.push(d);
         }
       }
-      return { pred, gaps, counts, maxGap };
-    }
-
-    // ─── update prediction UI ──────────────────────────────────────
-    function updatePredictUI(info) {
-      if (!info) {
-        predDigit.textContent = '-';
-        entryDigit.textContent = '-';
-        infoLine.textContent = 'Predict - | Last - | Gap -';
-        return;
+      let pred = bestDigits[0];
+      if (bestDigits.length > 1) {
+        // Tie-break: pick the one with lowest count
+        let minCount = Infinity;
+        for (let d of bestDigits) {
+          if (counts[d] < minCount) {
+            minCount = counts[d];
+            pred = d;
+          }
+        }
       }
-      const st = state[signalSymbol];
-      const last = st ? st.lastDigit : '-';
-      predDigit.textContent = info.pred;
-      entryDigit.textContent = info.pred;
-      infoLine.textContent = `Predict ${info.pred} | Last ${last} | Gap ${info.maxGap}`;
-      // update trade banner digit
-      tradeNowBanner.innerHTML = `⚡ TRADE NOW! ${info.pred} MATCH ⚡`;
+      return pred;
     }
 
-    // ─── rendering ──────────────────────────────────────────────────
-    let pendingCards = new Set(), renderScheduled = false;
-    function scheduleRender(sym) { pendingCards.add(sym); if (!renderScheduled) { renderScheduled = true; requestAnimationFrame(() => { pendingCards.forEach(s => renderCard(s)); pendingCards.clear(); renderScheduled = false; }); } }
-
-    function renderCard(sym) {
-      const st = state[sym], card = document.getElementById('card-'+sym); if (!card) return;
-      const displayName = getDisplayName(sym);
-      const pred = st.predicted, win = pred !== '-' && st.lastDigit === pred && st.history.length >= 20;
-      card.querySelector('.price').textContent = st.lastPrice + ' | ' + st.history.length + ' ticks';
-      card.querySelector('.last').textContent = st.lastDigit;
-      card.querySelector('.pred').textContent = pred;
-      const matchEl = card.querySelector('.match');
-      if (st.history.length < 20) { matchEl.textContent = '⏳ Collecting data…'; matchEl.className = 'match'; }
-      else { matchEl.textContent = win ? `✅ MATCH! Predicted ${pred} HIT` : `❌ Predict ${pred} | Last ${st.lastDigit}`; matchEl.className = 'match ' + (win ? 'win' : 'loss'); }
-
-      const total = st.totalPredictions, rate = total > 0 ? Math.round((st.wins/total)*100) : 0;
-      card.querySelector('.stats').innerHTML = `<span>Wins: <span class="num">${st.wins}</span></span><span>Losses: <span class="num">${st.losses}</span></span><span>Rate: <span class="num">${rate}%</span></span><span>Streak: <span class="num">${st.streak}</span></span><span>Best: <span class="num">${st.bestStreak}</span></span>`;
-      const gapEl = card.querySelector('.gap'); gapEl.textContent = pred !== '-' ? st.gaps[pred] + ' ticks' : '-';
-
-      const bar = card.querySelector('.bar'); bar.innerHTML = '';
-      const maxCount = Math.max(1, ...st.counter);
-      for (let d = 0; d < 10; d++) {
-        const col = document.createElement('div'); col.className = 'col';
-        const h = (st.counter[d]/maxCount)*28 + 4; col.style.height = h + 'px';
-        if (d === st.lastDigit) col.classList.add('active');
-        if (d === pred) col.classList.add('predict');
-        col.innerHTML = `<span>${st.counter[d]}</span><span class="label">${d}</span>`;
-        bar.appendChild(col);
-      }
-      card.querySelector('.ticks').textContent = st.history.slice(-60).join(' ');
-    }
-
+    // ─── UI RENDERING ──────────────────────────────────────────────
     function buildGrid() {
       gridEl.innerHTML = '';
-      symbols.forEach(sym => {
-        const displayName = getDisplayName(sym);
-        const card = document.createElement('div'); card.className = 'card'; card.id = 'card-'+sym;
+      SYMBOLS.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.id = 'card-' + s.id;
         card.innerHTML = `
-          <h2><span>${displayName}</span> <span style="font-size:11px;color:#6b7280;">${sym}</span></h2>
+          <div class="title"><span>${s.name}</span><span style="font-size:11px;color:#6b7280;">${s.id}</span></div>
           <div class="price">-</div>
-          <div class="digits"><span class="last">-</span><span style="font-size:20px;color:#6b7280;">→</span><span class="pred">-</span></div>
-          <div class="match">Waiting…</div>
-          <div class="stats">-</div>
-          <div style="font-size:11px;color:#94a3b8;">Gap: <span class="gap">-</span></div>
-          <div class="bar"></div>
-          <div class="ticks"></div>
+          <div class="digits">
+            <span class="last">-</span>
+            <span style="color:#6b7280;">→</span>
+            <span class="pred">-</span>
+          </div>
+          <div class="info">Gap: - | Count: -</div>
+          <div class="dots">• • • • •</div>
+          <div class="result pending">Waiting…</div>
         `;
         gridEl.appendChild(card);
       });
-      symbols.forEach(sym => renderCard(sym));
     }
 
-    function addLog(entry, type = 'loss') {
+    function updateCard(sym) {
+      const md = marketData[sym];
+      if (!md) return;
+      const card = document.getElementById('card-' + sym);
+      if (!card) return;
+      const pred = md.predicted;
+      card.querySelector('.price').textContent = md.lastPrice + ' | ' + md.history.length + ' ticks';
+      card.querySelector('.last').textContent = md.lastDigit;
+      card.querySelector('.pred').textContent = pred;
+      const gap = pred !== '-' ? md.gaps[pred] : '-';
+      const count = pred !== '-' ? md.counts[pred] : '-';
+      card.querySelector('.info').textContent = `Gap: ${gap} | Count: ${count}`;
+      // Window dots
+      const dots = card.querySelector('.dots');
+      if (md.windowOpen && !md.windowResolved) {
+        let d = '';
+        for (let i = 0; i < 5; i++) {
+          if (i < md.windowTicks.length) d += md.windowTicks[i] + ' ';
+          else d += '• ';
+        }
+        dots.textContent = d.trim();
+      } else {
+        dots.textContent = '• • • • •';
+      }
+      // Result
+      const res = card.querySelector('.result');
+      if (md.windowResolved) {
+        if (md.win) {
+          res.textContent = '✅ WIN';
+          res.className = 'result win';
+          card.classList.add('win');
+          card.classList.remove('loss');
+        } else {
+          res.textContent = '❌ LOSS';
+          res.className = 'result loss';
+          card.classList.add('loss');
+          card.classList.remove('win');
+        }
+      } else {
+        res.textContent = md.windowOpen ? '⏳ Window Open…' : '⏳ Waiting…';
+        res.className = 'result pending';
+        card.classList.remove('win', 'loss');
+      }
+    }
+
+    function updateAllCards() {
+      SYMBOLS.forEach(s => updateCard(s.id));
+    }
+
+    // ─── LOGGING ──────────────────────────────────────────────────
+    function addLog(entry, type = 'info') {
       const div = document.createElement('div');
-      div.className = 'entry';
-      if (type === 'win') div.classList.add('win');
-      else if (type === 'error') div.classList.add('error');
-      else if (type === 'info') div.classList.add('info');
-      else div.classList.add('loss');
+      div.className = 'entry ' + type;
       div.textContent = entry;
       logEl.prepend(div);
       while (logEl.children.length > 200) logEl.removeChild(logEl.lastChild);
     }
 
-    // ─── process tick ─────────────────────────────────────────────
+    // ─── PROCESS TICK ─────────────────────────────────────────────
     function processTick(sym, quote, digit) {
       if (paused) return;
-      const st = state[sym];
-      if (!st) return;
-      st.history.push(digit); if (st.history.length > MAX_HISTORY) st.history.shift();
-      st.lastPrice = quote; st.lastDigit = digit;
-      st.counter[digit] = (st.counter[digit] || 0) + 1;
-      const newPred = analyze(sym);
-      const oldPred = st.predicted;
-      st.predicted = newPred;
+      const md = marketData[sym];
+      if (!md) return;
+      md.history.push(digit);
+      if (md.history.length > MAX_HISTORY) md.history.shift();
+      md.lastPrice = quote;
+      md.lastDigit = digit;
 
-      // Update prediction for signal symbol if running
-      if (sym === signalSymbol && signalRunning) {
-        // Update prediction data in real-time (will be used in startCycle)
-        const info = calcPrediction(signalSymbol);
-        if (info) {
-          signalPredictionData = info;
-          // If we are in ready/go phase, update UI prediction dynamically (optional)
-          if (signalPhase === 'ready' || signalPhase === 'go') {
-            updatePredictUI(info);
+      // Update prediction
+      const newPred = computePrediction(sym);
+      if (newPred !== null) md.predicted = newPred;
+
+      // If window is open for this market, collect tick
+      if (md.windowOpen && !md.windowResolved) {
+        md.windowTicks.push(digit);
+        // Check if we have 5 ticks
+        if (md.windowTicks.length >= 5) {
+          md.windowResolved = true;
+          // Check if predicted digit appears
+          const pred = md.predicted;
+          if (pred !== '-' && md.windowTicks.includes(pred)) {
+            md.win = true;
+          } else {
+            md.win = false;
           }
+          updateCard(sym);
+          // Check if all markets resolved
+          checkAllResolved();
+        } else {
+          updateCard(sym);
         }
+      } else {
+        // Just update card (prediction may change)
+        updateCard(sym);
       }
 
-      // Normal match detection for all symbols
-      if (oldPred !== '-' && st.history.length >= 21 && st.lastPrediction !== undefined && st.lastPrediction !== '-') {
-        const win = digit === st.lastPrediction;
-        st.totalPredictions++;
-        if (win) { st.wins++; st.streak++; if (st.streak > st.bestStreak) st.bestStreak = st.streak; }
-        else { st.losses++; st.streak = 0; }
-        if (win) {
-          const only1s = only1sCheck.checked, is1s = sym.includes('1S');
-          if (!only1s || is1s) {
-            playBeep(is1s ? 880 : 660);
-            const card = document.getElementById('card-'+sym);
-            if (card) { card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 800); }
-            if (navigator.vibrate) navigator.vibrate([80,50,80]);
-          }
-        }
-        saveHistory();
-      }
-      st.lastPrediction = newPred;
-      scheduleRender(sym);
+      // Update global tick counter
+      globalTickCount++;
+      tickCounterEl.textContent = `📡 ${globalTickCount} ticks`;
 
-      // Handle signal window ticks
-      if (sym === signalSymbol && signalRunning && signalPhase === 'window') {
-        signalWindowTicks.push(digit);
-        updateWindowUI();
-        if (signalWindowTicks.length === 5) {
-          closeWindowAndShowResult();
-        }
+      // Check if we have enough data to start signal if not yet running
+      if (signalRunning && signalPhase === 'idle') {
+        checkAllMarketsReady();
       }
     }
 
-    // ─── analyze (for card predictions) ────────────────────────────
-    function analyze(sym) {
-      const st = state[sym], h = st.history;
-      if (h.length < 20) return '-';
-      const method = methodSelect.value, c = st.counter;
-      for (let d = 0; d < 10; d++) { let g = 0; for (let i = h.length-1; i>=0; i--) { if (h[i]===d) break; g++; } st.gaps[d]=g; }
-      let best = 0;
-      if (method === 'overdue') { let max = st.gaps[0]; for (let d=1; d<10; d++) if (st.gaps[d] > max) { max = st.gaps[d]; best = d; } }
-      else if (method === 'hot') { let max = c[0]; for (let d=1; d<10; d++) if (c[d] > max) { max = c[d]; best = d; } }
-      else if (method === 'cold') { let min = c[0]; for (let d=1; d<10; d++) if (c[d] < min) { min = c[d]; best = d; } }
-      else { const t = h.length / 10; let bd = Math.abs(c[0]-t), best = 0; for (let d=1; d<10; d++) { const diff = Math.abs(c[d]-t); if (diff < bd) { bd = diff; best = d; } } }
-      return best;
+    // ─── SIGNAL TIMER ─────────────────────────────────────────────
+    function checkAllMarketsReady() {
+      let ready = true;
+      SYMBOLS.forEach(s => {
+        const md = marketData[s.id];
+        if (!md || md.history.length < COLLECT_THRESHOLD) ready = false;
+      });
+      if (ready && signalRunning && signalPhase === 'idle') {
+        allMarketsReady = true;
+        startCountdown();
+      }
     }
 
-    // ─── Signal Timer Functions ─────────────────────────────────────
-    function startCycle() {
+    function startCountdown() {
       if (!signalRunning) return;
-      // Compute prediction
-      const info = calcPrediction(signalSymbol);
-      if (!info) {
-        // Not enough data, wait and retry
-        setTimeout(() => { if (signalRunning) startCycle(); }, 600);
-        return;
-      }
-      signalPredictionData = info;
-      signalPredictedDigit = info.pred;
-      updatePredictUI(info);
-      addLog(`🔔 Signal started for ${getDisplayName(signalSymbol)} | Predicted digit: ${info.pred}`, 'info');
-
-      // Reset window
-      signalWindowTicks = [];
       signalPhase = 'ready';
       signalCountdown = 15;
-      resultOverlay.classList.add('hidden');
-      tradeNowBanner.classList.remove('show');
-      windowDots.textContent = '• • • • •';
-      windowInfo.textContent = 'Ready in 15s';
+      // Update predictions for all markets
+      SYMBOLS.forEach(s => {
+        const md = marketData[s.id];
+        const pred = computePrediction(s.id);
+        if (pred !== null) md.predicted = pred;
+        md.windowOpen = false;
+        md.windowResolved = false;
+        md.windowTicks = [];
+        md.win = false;
+        updateCard(s.id);
+      });
+      updateSummary('READY – All markets ready');
+      addLog('🔔 Signal started – 15s countdown for all markets', 'info');
 
-      // Update UI for READY phase
-      phaseTitle.textContent = '◉ SIGNAL FOUND - READY';
-      phaseTitle.style.color = '#ffcc33';
-      timerDisplay.textContent = '15:00';
-      timerDisplay.style.color = '#7ec8e3';
-      timerDisplay.classList.remove('blink');
-      statusText.textContent = 'READY';
-      statusText.style.color = '#ffcc33';
-      progressFill.style.background = '#7ec8e3';
-      progressFill.style.width = '0%';
-
-      // Clear any existing interval
       if (signalTimerInterval) clearInterval(signalTimerInterval);
-
       signalTimerInterval = setInterval(() => {
         if (!signalRunning) { clearInterval(signalTimerInterval); return; }
         signalCountdown--;
-        // Update timer display
-        const mm = String(Math.floor(signalCountdown / 60)).padStart(2, '0');
-        const ss = String(signalCountdown % 60).padStart(2, '0');
-        timerDisplay.textContent = mm + ':' + ss;
-
-        const progress = ((15 - signalCountdown) / 15) * 100;
-        progressFill.style.width = progress + '%';
-
-        // Phase logic
-        if (signalCountdown > 5) {
-          // READY phase (15..6)
-          phaseTitle.textContent = '◉ SIGNAL FOUND - READY';
-          phaseTitle.style.color = '#ffcc33';
-          timerDisplay.style.color = '#7ec8e3';
-          timerDisplay.classList.remove('blink');
-          statusText.textContent = 'READY';
-          statusText.style.color = '#ffcc33';
-          progressFill.style.background = '#7ec8e3';
-          const secs = signalCountdown;
-          windowInfo.textContent = `Ready in ${secs}s`;
-        } else if (signalCountdown > 0) {
-          // GO TIME phase (5..1)
-          if (signalPhase !== 'go') {
-            signalPhase = 'go';
-            phaseTitle.textContent = '◉ GO TIME!';
-            phaseTitle.style.color = '#ff3b3b';
-            timerDisplay.style.color = '#ff3b3b';
-            timerDisplay.classList.add('blink');
-            statusText.textContent = 'GO TIME! ⚡';
-            statusText.style.color = '#ff3b3b';
-            progressFill.style.background = '#ff3b3b';
-            addLog('⚡ GO TIME!', 'info');
-          }
-          // beep each second
-          playBeep(880, 0.12);
-          const secs = signalCountdown;
-          windowInfo.textContent = `GO in ${secs}s`;
-        } else {
-          // countdown == 0 => TRADE NOW
+        updateTimerUI();
+        if (signalCountdown <= 0) {
           clearInterval(signalTimerInterval);
           signalTimerInterval = null;
-          openTradeWindow();
+          openTradeWindows();
         }
       }, 1000);
+      updateTimerUI();
     }
 
-    function openTradeWindow() {
+    function updateTimerUI() {
+      const sec = signalCountdown;
+      const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+      const ss = String(sec % 60).padStart(2, '0');
+      timerDisplay.textContent = mm + ':' + ss;
+      const progress = ((15 - sec) / 15) * 100;
+      progressFill.style.width = progress + '%';
+
+      if (sec > 5) {
+        // READY
+        signalPhase = 'ready';
+        phaseTitle.textContent = '◉ SIGNAL FOUND – READY';
+        phaseTitle.style.color = '#ffcc33';
+        timerDisplay.style.color = '#7ec8e3';
+        timerDisplay.classList.remove('blink');
+        statusText.textContent = 'READY';
+        statusText.style.color = '#ffcc33';
+        progressFill.style.background = '#7ec8e3';
+        windowActive = false;
+        updateSummary(`Ready in ${sec}s`);
+        // low beep optional
+      } else if (sec > 0) {
+        // GO TIME
+        if (signalPhase !== 'go') {
+          signalPhase = 'go';
+          phaseTitle.textContent = '◉ GO TIME!';
+          phaseTitle.style.color = '#ff3b3b';
+          timerDisplay.style.color = '#ff3b3b';
+          timerDisplay.classList.add('blink');
+          statusText.textContent = 'GO TIME! ⚡';
+          statusText.style.color = '#ff3b3b';
+          progressFill.style.background = '#ff3b3b';
+          addLog('⚡ GO TIME!', 'info');
+          updateSummary('GO TIME! Get ready');
+        }
+        playBeep(880, 0.12);
+        updateSummary(`GO in ${sec}s`);
+      } else {
+        // reached 0 -> handled separately
+      }
+    }
+
+    function openTradeWindows() {
       if (!signalRunning) return;
       signalPhase = 'window';
-      signalWindowTicks = [];
-      resultOverlay.classList.add('hidden');
-
-      // Show TRADE NOW banner
-      tradeNowBanner.classList.add('show');
-      tradeNowBanner.innerHTML = `⚡ TRADE NOW! ${signalPredictedDigit} MATCH ⚡`;
-
-      phaseTitle.textContent = '● TRADE WINDOW ACTIVE';
-      phaseTitle.style.color = '#60a5fa';
+      windowActive = true;
       timerDisplay.textContent = '00:00';
       timerDisplay.style.color = '#60a5fa';
       timerDisplay.classList.remove('blink');
-      statusText.textContent = 'WINDOW OPEN';
+      phaseTitle.textContent = '● TRADE WINDOWS OPEN';
+      phaseTitle.style.color = '#60a5fa';
+      statusText.textContent = 'WINDOWS OPEN';
       statusText.style.color = '#60a5fa';
       progressFill.style.background = '#60a5fa';
       progressFill.style.width = '100%';
-
-      windowDots.textContent = '• • • • •';
-      windowInfo.textContent = 'Waiting for 5 ticks…';
-
+      updateSummary('Trade windows open – collecting 5 ticks per market');
       playDoubleBeep();
-      addLog(`🚪 Trade window opened for ${getDisplayName(signalSymbol)}. Waiting for 5 ticks.`, 'info');
-      // Ticks will be collected via processTick
+      addLog('🚪 Trade windows opened for all markets', 'info');
+
+      // Open window for each market
+      SYMBOLS.forEach(s => {
+        const md = marketData[s.id];
+        md.windowOpen = true;
+        md.windowResolved = false;
+        md.windowTicks = [];
+        md.win = false;
+        updateCard(s.id);
+      });
+
+      // Set a safety timeout to resolve if some markets don't get 5 ticks (shouldn't happen)
+      setTimeout(() => {
+        if (signalRunning) checkAllResolved();
+      }, 10000);
     }
 
-    function updateWindowUI() {
-      const ticks = signalWindowTicks;
-      let display = '';
-      for (let i = 0; i < 5; i++) {
-        if (i < ticks.length) display += ticks[i] + ' ';
-        else display += '• ';
+    function checkAllResolved() {
+      let allResolved = true;
+      SYMBOLS.forEach(s => {
+        const md = marketData[s.id];
+        if (md.windowOpen && !md.windowResolved) allResolved = false;
+      });
+      if (allResolved && windowActive) {
+        windowActive = false;
+        showResults();
+      } else {
+        // force resolve any still open after 10s (safety)
+        setTimeout(() => {
+          if (signalRunning) {
+            SYMBOLS.forEach(s => {
+              const md = marketData[s.id];
+              if (md.windowOpen && !md.windowResolved) {
+                md.windowResolved = true;
+                md.win = false; // assume loss
+                updateCard(s.id);
+              }
+            });
+            checkAllResolved();
+          }
+        }, 2000);
       }
-      windowDots.textContent = display.trim();
-      windowInfo.textContent = `Tick ${ticks.length}/5 got ${ticks.length>0?ticks.join(','):'…'} need ${5-ticks.length} more`;
     }
 
-    function closeWindowAndShowResult() {
+    function showResults() {
       if (!signalRunning) return;
       signalPhase = 'result';
-      if (signalTimerInterval) clearInterval(signalTimerInterval);
+      // Build summary
+      let lines = [];
+      SYMBOLS.forEach(s => {
+        const md = marketData[s.id];
+        const pred = md.predicted;
+        const last = md.lastDigit;
+        const ticks = md.windowTicks.join(',');
+        const win = md.win;
+        lines.push(`${s.name}: Predict ${pred} | Last ${last} | Ticks ${ticks} | ${win ? '✅ WIN' : '❌ LOSS'}`);
+      });
+      const summaryText = lines.join('  ');
+      updateSummary('RESULTS: ' + summaryText);
+      addLog('📊 Results:\n' + lines.join('\n'), 'info');
 
-      const pred = signalPredictedDigit;
-      const ticks = signalWindowTicks;
-      const win = ticks.some(t => t === pred);
+      // Show result for 4s then restart
+      phaseTitle.textContent = '📊 RESULTS';
+      phaseTitle.style.color = '#93c5fd';
+      timerDisplay.textContent = '--';
+      statusText.textContent = 'Restarting…';
+      progressFill.style.background = '#93c5fd';
 
-      // Show result overlay
-      resultOverlay.classList.remove('hidden');
-      if (win) {
-        resultText.textContent = 'WIN ✓';
-        resultText.style.color = '#6ee7b7';
-        resultOverlay.className = 'result-overlay win';
-        addLog(`✅ SIGNAL WIN! Predicted ${pred} appeared in ${ticks.join(',')}`, 'win');
-        playDoubleBeep();
-      } else {
-        resultText.textContent = 'LOSS ✕';
-        resultText.style.color = '#fca5a5';
-        resultOverlay.className = 'result-overlay loss';
-        addLog(`❌ SIGNAL LOSS! Predicted ${pred} did not appear in ${ticks.join(',')}`, 'loss');
-      }
-
-      // Countdown to restart
-      let countdown = 3;
-      resultSub.textContent = `Continuing in ${countdown}s…`;
-      const resultInterval = setInterval(() => {
-        countdown--;
-        if (countdown <= 0) {
-          clearInterval(resultInterval);
-          resultOverlay.classList.add('hidden');
-          tradeNowBanner.classList.remove('show');
-          if (signalRunning) {
-            // Restart cycle
-            startCycle();
-          }
-        } else {
-          resultSub.textContent = `Continuing in ${countdown}s…`;
+      setTimeout(() => {
+        if (signalRunning) {
+          // Reset windows and start again
+          SYMBOLS.forEach(s => {
+            const md = marketData[s.id];
+            md.windowOpen = false;
+            md.windowResolved = false;
+            md.windowTicks = [];
+            md.win = false;
+            updateCard(s.id);
+          });
+          startCountdown();
         }
-      }, 1000);
-
-      // Update UI for result phase
-      phaseTitle.textContent = win ? '✅ WIN' : '❌ LOSS';
-      phaseTitle.style.color = win ? '#6ee7b7' : '#fca5a5';
-      timerDisplay.textContent = '00:00';
-      statusText.textContent = win ? 'WINNER' : 'LOSS';
-      progressFill.style.width = '100%';
-      progressFill.style.background = win ? '#6ee7b7' : '#fca5a5';
-      windowInfo.textContent = `Result: ${win ? 'WIN' : 'LOSS'} in 5 ticks`;
+      }, 4000);
     }
 
-    // ─── Signal control ─────────────────────────────────────────────
+    function updateSummary(text) {
+      summaryEl.textContent = text;
+    }
+
+    // ─── SIGNAL CONTROL ────────────────────────────────────────────
     function startSignal() {
       if (signalRunning) return;
-      const sym = signalSymbolSelect.value;
-      signalSymbol = sym;
+      // Reset all market window states
+      SYMBOLS.forEach(s => {
+        const md = marketData[s.id];
+        md.windowOpen = false;
+        md.windowResolved = false;
+        md.windowTicks = [];
+        md.win = false;
+        md.predicted = computePrediction(s.id) || '-';
+        updateCard(s.id);
+      });
       signalRunning = true;
       signalPhase = 'idle';
-      signalWindowTicks = [];
-      resultOverlay.classList.add('hidden');
-      tradeNowBanner.classList.remove('show');
-
-      // Check if we have enough ticks
-      const st = state[signalSymbol];
-      if (!st || st.history.length < 80) {
-        // Wait for ticks
-        phaseTitle.textContent = '⏳ COLLECTING TICKS';
-        timerDisplay.textContent = '--';
-        statusText.textContent = `Collecting ${getDisplayName(signalSymbol)}…`;
-        progressFill.style.width = '0%';
-        windowInfo.textContent = `Need 80 ticks, have ${st?st.history.length:0}`;
-        addLog(`⏳ Collecting ticks for ${getDisplayName(signalSymbol)}`, 'info');
-        // start a check interval
-        if (signalTimerInterval) clearInterval(signalTimerInterval);
-        signalTimerInterval = setInterval(() => {
-          if (!signalRunning) { clearInterval(signalTimerInterval); return; }
-          const st2 = state[signalSymbol];
-          if (st2 && st2.history.length >= 80) {
-            clearInterval(signalTimerInterval);
-            signalTimerInterval = null;
-            startCycle();
-          } else {
-            const cnt = st2 ? st2.history.length : 0;
-            phaseTitle.textContent = `⏳ COLLECTING TICKS (${cnt}/80)`;
-            windowInfo.textContent = `Need 80 ticks, have ${cnt}`;
-            progressFill.style.width = Math.min(100, (cnt/80)*100) + '%';
-          }
-        }, 500);
-      } else {
-        startCycle();
-      }
+      allMarketsReady = false;
+      windowActive = false;
+      if (signalTimerInterval) clearInterval(signalTimerInterval);
+      phaseTitle.textContent = '⏳ COLLECTING TICKS';
+      phaseTitle.style.color = '#ffcc33';
+      timerDisplay.textContent = '--';
+      statusText.textContent = 'Collecting data…';
+      progressFill.style.width = '0%';
+      updateSummary('Collecting ticks for all markets…');
+      addLog('▶️ Signal started – collecting ticks', 'info');
+      checkAllMarketsReady();
+      // Also start a periodic check
+      if (signalTimerInterval) clearInterval(signalTimerInterval);
+      signalTimerInterval = setInterval(() => {
+        if (!signalRunning) { clearInterval(signalTimerInterval); return; }
+        if (signalPhase === 'idle') {
+          checkAllMarketsReady();
+          // update progress
+          let total = 0;
+          SYMBOLS.forEach(s => { total += marketData[s.id].history.length; });
+          const avg = Math.round(total / SYMBOLS.length);
+          const pct = Math.min(100, (avg / COLLECT_THRESHOLD) * 100);
+          progressFill.style.width = pct + '%';
+          updateSummary(`Collecting… ${avg}/${COLLECT_THRESHOLD} avg ticks`);
+        }
+      }, 500);
     }
 
     function stopSignal() {
       signalRunning = false;
-      if (signalTimerInterval) {
-        clearInterval(signalTimerInterval);
-        signalTimerInterval = null;
-      }
+      if (signalTimerInterval) clearInterval(signalTimerInterval);
+      signalTimerInterval = null;
       signalPhase = 'idle';
       phaseTitle.textContent = '⏹ SIGNAL STOPPED';
+      phaseTitle.style.color = '#fca5a5';
       timerDisplay.textContent = '--';
-      statusText.textContent = 'Press Start to begin';
+      statusText.textContent = 'Stopped';
       progressFill.style.width = '0%';
-      windowDots.textContent = '• • • • •';
-      windowInfo.textContent = '';
-      resultOverlay.classList.add('hidden');
-      tradeNowBanner.classList.remove('show');
-      predDigit.textContent = '-';
-      entryDigit.textContent = '-';
-      infoLine.textContent = 'Predict - | Last - | Gap -';
-      addLog('⏹ Signal timer stopped', 'info');
+      updateSummary('');
+      addLog('⏹ Signal stopped', 'info');
+      SYMBOLS.forEach(s => {
+        const md = marketData[s.id];
+        md.windowOpen = false;
+        md.windowResolved = false;
+        md.windowTicks = [];
+        md.win = false;
+        updateCard(s.id);
+      });
     }
 
-    // ─── WebSocket ──────────────────────────────────────────────────
+    // ─── WEBSOCKET ──────────────────────────────────────────────────
     function connect() {
       const appId = appIdInput.value.trim();
       if (!appId) {
@@ -853,17 +683,6 @@
         return;
       }
       settingsError.style.display = 'none';
-
-      const symStr = symbolsInput.value.trim();
-      const symList = symStr.split(',').map(s => s.trim()).filter(s => s);
-      if (symList.length === 0) {
-        settingsError.textContent = '⚠️ Please enter at least one symbol.';
-        settingsError.style.display = 'block';
-        return;
-      }
-      initSymbols(symList);
-      buildGrid();
-      loadHistory();
 
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) ws.close();
 
@@ -880,13 +699,13 @@
         statusEl.className = 'live';
         statusEl.textContent = '● Live';
         reconnectAttempts = 0;
-
-        symbols.forEach(sym => {
-          const req = { ticks: sym, subscribe: 1 };
+        // Subscribe to ALL symbols
+        SYMBOLS.forEach(s => {
+          const req = { ticks: s.id, subscribe: 1 };
           console.log(`📤 Sending subscribe: ${JSON.stringify(req)}`);
           ws.send(JSON.stringify(req));
         });
-        addLog(`📡 Subscribed to ${symbols.length} symbols`, 'info');
+        addLog(`📡 Subscribed to ${SYMBOLS.length} symbols`, 'info');
       };
 
       ws.onmessage = (msg) => {
@@ -902,7 +721,7 @@
           }
           if (!data.tick) return;
           const sym = data.tick.symbol;
-          if (!state[sym]) {
+          if (!marketData[sym]) {
             console.warn(`⚠️ Unknown symbol: ${sym}`);
             return;
           }
@@ -911,8 +730,6 @@
           const digit = parseInt(quote.toString().slice(-1));
           if (isNaN(digit)) return;
 
-          globalTickCount++;
-          tickCounterEl.textContent = `📡 ${globalTickCount} ticks`;
           processTick(sym, quote.toString(), digit);
         } catch (e) {
           console.warn('⚠️ Error parsing message:', e);
@@ -943,106 +760,67 @@
       };
     }
 
-    // ─── clear history ─────────────────────────────────────────────
-    function clearHistory() {
-      if (!confirm('Clear all history and stats?')) return;
-      symbols.forEach(sym => {
-        const st = state[sym];
-        if (st) {
-          st.history = []; st.counter = Array(10).fill(0); st.gaps = Array(10).fill(0);
-          st.lastPrice = '-'; st.lastDigit = '-'; st.predicted = '-'; st.lastPrediction = undefined;
-          st.wins = 0; st.losses = 0; st.streak = 0; st.bestStreak = 0; st.totalPredictions = 0;
-        }
-      });
-      localStorage.removeItem(STORAGE_KEY);
-      logEl.innerHTML = '';
-      symbols.forEach(sym => renderCard(sym));
-      statusEl.textContent = '● Cleared';
-      setTimeout(() => statusEl.textContent = '● Live', 1000);
-      stopSignal();
-    }
-
-    // ─── event listeners ──────────────────────────────────────────
-    methodSelect.addEventListener('change', () => {
-      symbols.forEach(sym => { if (state[sym] && state[sym].history.length >= 20) { state[sym].predicted = analyze(sym); scheduleRender(sym); } });
-    });
-
-    soundBtn.addEventListener('click', () => {
-      if (!audioCtx) initAudio();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      soundEnabled = !soundEnabled;
-      soundBtn.textContent = soundEnabled ? '🔔 Sound ON' : '🔇 Enable Sound';
-      soundBtn.classList.toggle('on', soundEnabled);
-      if (soundEnabled) playBeep(660);
-    });
-
-    pauseCheck.addEventListener('change', () => { paused = pauseCheck.checked; statusEl.textContent = paused ? '⏸ Paused' : '● Live'; statusEl.className = paused ? '' : 'live'; });
-    clearBtn.addEventListener('click', clearHistory);
-
-    reconnectBtn.addEventListener('click', () => { if (ws) { ws.close(); } connect(); });
-
-    only1sCheck.addEventListener('change', () => {
-      symbols.forEach(sym => { const card = document.getElementById('card-'+sym); if (!card) return; const is1s = sym.includes('1S'); if (only1sCheck.checked && !is1s) card.classList.add('hidden'); else card.classList.remove('hidden'); });
-    });
-
+    // ─── EVENTS ──────────────────────────────────────────────────
     saveSettingsBtn.addEventListener('click', () => {
       const appId = appIdInput.value.trim();
       const token = apiTokenInput.value.trim();
-      const symStr = symbolsInput.value.trim();
-      const sigSym = signalSymbolSelect.value;
       if (!appId) { settingsError.textContent = '⚠️ App ID is required.'; settingsError.style.display = 'block'; return; }
-      if (!symStr) { settingsError.textContent = '⚠️ Please enter at least one symbol.'; settingsError.style.display = 'block'; return; }
       settingsError.style.display = 'none';
-      saveCredentials(appId, token, symStr, sigSym);
+      localStorage.setItem('deriv_creds', JSON.stringify({ appId, token }));
       if (ws) { ws.close(); }
       connect();
     });
 
     clearSettingsBtn.addEventListener('click', () => {
-      clearCredentials();
-      settingsError.style.display = 'none';
+      localStorage.removeItem('deriv_creds');
+      appIdInput.value = '';
+      apiTokenInput.value = '';
       if (ws) { ws.close(); }
     });
 
-    loadDefaultSymbolsBtn.addEventListener('click', () => {
-      symbolsInput.value = DEFAULT_SYMBOLS.join(', ');
+    startSignalBtn.addEventListener('click', () => {
+      if (!soundEnabled) {
+        // Ask to enable sound
+        if (confirm('Enable sound alerts?')) {
+          soundEnabled = true;
+          initAudio();
+          document.querySelector('#startSignalBtn').style.background = '#065f46';
+        }
+      }
+      startSignal();
     });
 
-    startSignalBtn.addEventListener('click', startSignal);
     stopSignalBtn.addEventListener('click', stopSignal);
 
-    let settingsVisible = true;
-    toggleSettingsBtn.addEventListener('click', () => {
-      settingsVisible = !settingsVisible;
-      settingsBody.style.display = settingsVisible ? 'block' : 'none';
-      toggleSettingsBtn.textContent = settingsVisible ? '▼' : '▶';
+    // Sound toggle (extra)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 's' || e.key === 'S') {
+        soundEnabled = !soundEnabled;
+        if (soundEnabled) initAudio();
+        addLog(`Sound ${soundEnabled ? 'ON' : 'OFF'}`, 'info');
+      }
     });
 
-    // ─── start ──────────────────────────────────────────────────────
-    loadCredentials();
-    const savedCred = localStorage.getItem(CRED_KEY);
-    if (savedCred) {
-      try {
-        const cred = JSON.parse(savedCred);
-        if (cred.symbols) symbolsInput.value = cred.symbols;
-        if (cred.signalSymbol) signalSymbolSelect.value = cred.signalSymbol;
-      } catch (_) {}
-    }
-    initSymbols(symbolsInput.value.split(',').map(s => s.trim()).filter(s => s));
-    loadHistory();
+    // ─── INIT ──────────────────────────────────────────────────────
+    // Load saved credentials
+    try {
+      const saved = localStorage.getItem('deriv_creds');
+      if (saved) {
+        const cred = JSON.parse(saved);
+        if (cred.appId) appIdInput.value = cred.appId;
+        if (cred.token) apiTokenInput.value = cred.token;
+      }
+    } catch (_) {}
+
     buildGrid();
-    symbols.forEach(sym => { if (state[sym] && state[sym].history.length >= 20) { state[sym].predicted = analyze(sym); scheduleRender(sym); } });
+    // Connect if appId present
+    if (appIdInput.value.trim()) connect();
 
-    if (appIdInput.value.trim()) {
-      connect();
-    } else {
-      statusEl.textContent = '● Enter App ID above';
-      statusEl.className = 'connecting';
-    }
-
-    setInterval(saveHistory, 10000);
-    window.addEventListener('beforeunload', saveHistory);
-    only1sCheck.dispatchEvent(new Event('change'));
+    // Start with idle UI
+    phaseTitle.textContent = '⏳ IDLE';
+    timerDisplay.textContent = '--';
+    statusText.textContent = 'Press Start to begin';
+    progressFill.style.width = '0%';
   </script>
 </body>
 </html>
