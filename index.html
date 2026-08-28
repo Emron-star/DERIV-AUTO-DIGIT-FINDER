@@ -62,13 +62,16 @@
     .bar .col.predict { background: #fbbf24; border: 1px solid #fbbf24; }
     .bar .col .label { font-size: 7px; color: #6b7280; margin-top: 2px; }
     .ticks { font-family: monospace; font-size: 10px; color: #6b7280; word-break: break-all; max-height: 48px; overflow-y: auto; background: #0b0d12; padding: 4px 6px; border-radius: 6px; margin-top: 4px; }
-    .log { background: #14181f; border: 1px solid #2a3344; border-radius: 10px; padding: 10px; margin-top: 14px; max-height: 160px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6; }
+    .log {
+      background: #14181f; border: 1px solid #2a3344; border-radius: 10px;
+      padding: 10px; margin-top: 14px; max-height: 200px;
+      overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6;
+    }
     .log .entry { border-bottom: 1px solid #1f2937; padding: 2px 0; }
     .log .entry.win { color: #6ee7b7; }
     .log .entry.loss { color: #fca5a5; }
     .log .entry.error { color: #fca5a5; background: #3b1a1a; padding: 2px 6px; border-radius: 4px; }
-    .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
-
+    .log .entry.info { color: #93c5fd; }
     .settings {
       background: #14181f; border: 1px solid #2a3344; border-radius: 12px;
       padding: 14px; margin-bottom: 14px;
@@ -94,7 +97,6 @@
 <body>
   <h1>📊 Deriv Advanced Digit Finder <span style="font-size:14px;font-weight:400;color:#94a3b8;">All Volatility + 1s</span></h1>
 
-  <!-- SETTINGS -->
   <div class="settings" id="settingsPanel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
       <span style="font-weight:600;">🔐 API Credentials</span>
@@ -103,20 +105,19 @@
     <div id="settingsBody">
       <div class="row">
         <label>App ID:</label>
-        <input type="text" id="appIdInput" placeholder="e.g. 1089 or 34f2He8A3Lb6APAzSdj2a" value="34f2He8A3Lb6APAzSdj2a" />
+        <input type="text" id="appIdInput" placeholder="e.g. 1089" value="1089" />
         <label>API Token (optional):</label>
-        <input type="password" id="apiTokenInput" placeholder="Your API token" />
+        <input type="password" id="apiTokenInput" placeholder="Paste token for OAuth" />
         <button id="saveSettingsBtn">Save & Connect</button>
         <button id="clearSettingsBtn" class="danger">Clear</button>
       </div>
       <div class="hint">
-        💡 App ID from your Deriv Dashboard. If you're using an OAuth app, <strong>you must provide an API token</strong> for authorization.
+        💡 For public data, use App ID <code>1089</code> with no token. For your own app, enter your App ID and optional token.
       </div>
       <div id="settingsError" class="error-msg" style="display:none;"></div>
     </div>
   </div>
 
-  <!-- TOP BAR -->
   <div class="top-bar">
     <label>Method:
       <select id="method">
@@ -290,11 +291,13 @@
       SYMBOLS.forEach(s => renderCard(s.id));
     }
 
-    function addLog(entry, isWin = false, isError = false) {
+    // ─── logging ────────────────────────────────────────────────────
+    function addLog(entry, type = 'loss') {
       const div = document.createElement('div');
       div.className = 'entry';
-      if (isWin) div.classList.add('win');
-      else if (isError) div.classList.add('error');
+      if (type === 'win') div.classList.add('win');
+      else if (type === 'error') div.classList.add('error');
+      else if (type === 'info') div.classList.add('info');
       else div.classList.add('loss');
       div.textContent = entry;
       logEl.prepend(div);
@@ -321,7 +324,7 @@
           const only1s = only1sCheck.checked, is1s = symId.includes('1S');
           if (!only1s || is1s) {
             playBeep(is1s);
-            addLog(`✅ ${symId} | Predicted ${st.lastPrediction} → ${digit} HIT!`, true);
+            addLog(`✅ ${symId} | Predicted ${st.lastPrediction} → ${digit} HIT!`, 'win');
             const card = document.getElementById('card-'+symId);
             if (card) { card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 800); }
             if (navigator.vibrate) navigator.vibrate([80,50,80]);
@@ -348,58 +351,60 @@
       }
 
       const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`;
+      console.log(`🔗 Connecting to ${wsUrl}`);
       statusEl.className = 'connecting';
       statusEl.textContent = '● Connecting…';
       ws = new WebSocket(wsUrl);
 
-      let authSent = false;
-
       ws.onopen = () => {
+        console.log('✅ WebSocket opened');
         statusEl.className = 'live';
         statusEl.textContent = '● Live';
         reconnectAttempts = 0;
-        console.log('🔌 Connected to Deriv');
 
         const token = apiTokenInput.value.trim();
         if (token) {
-          // Send authorize request
+          console.log('🔑 Sending authorize request...');
           ws.send(JSON.stringify({ authorize: token }));
-          authSent = true;
-          addLog('🔑 Sending authorization request…', false, false);
+          addLog('🔑 Sending authorization request…', 'info');
         } else {
-          // No token — subscribe directly (works for public App IDs like 1089)
+          console.log('📡 No token – subscribing to public ticks');
           SYMBOLS.forEach(s => ws.send(JSON.stringify({ ticks: s.id, subscribe: 1 })));
-          addLog('📡 Subscribed to public tick stream (no auth)', false, false);
+          addLog('📡 Subscribed to public tick stream (no auth)', 'info');
         }
       };
 
       ws.onmessage = (msg) => {
         try {
           const data = JSON.parse(msg.data);
+          console.log('📨 Message received:', data);
 
           // Handle authorization response
           if (data.authorize) {
             if (data.error) {
-              const errMsg = data.error.message || 'Unknown error';
-              addLog(`❌ Authorization failed: ${errMsg}`, false, true);
-              settingsError.textContent = `Authorization error: ${errMsg}`;
+              const errMsg = data.error.message || 'Unknown auth error';
+              console.error('❌ Auth error:', errMsg);
+              addLog(`❌ Authorization failed: ${errMsg}`, 'error');
+              settingsError.textContent = `Auth error: ${errMsg}`;
               settingsError.style.display = 'block';
               statusEl.className = 'error';
               statusEl.textContent = '● Auth Failed';
               return;
             } else {
               isAuthorized = true;
-              addLog(`✅ Authorized as ${data.authorize.loginid || 'user'}`, true);
-              // Now subscribe to ticks
+              console.log('✅ Authorized as', data.authorize.loginid);
+              addLog(`✅ Authorized as ${data.authorize.loginid || 'user'}`, 'win');
+              // Subscribe to ticks after auth
               SYMBOLS.forEach(s => ws.send(JSON.stringify({ ticks: s.id, subscribe: 1 })));
-              addLog('📡 Subscribed to tick stream', false, false);
+              addLog('📡 Subscribed to tick stream', 'info');
             }
             return;
           }
 
-          // Handle errors
+          // Handle server errors
           if (data.error) {
-            addLog(`❌ Server error: ${data.error.message}`, false, true);
+            console.error('❌ Server error:', data.error);
+            addLog(`❌ Server error: ${data.error.message}`, 'error');
             settingsError.textContent = `Server error: ${data.error.message}`;
             settingsError.style.display = 'block';
             return;
@@ -417,24 +422,28 @@
           globalTickCount++;
           tickCounterEl.textContent = `📡 ${globalTickCount} ticks`;
           processTick(sym, quote.toString(), digit);
-        } catch (e) { /* ignore parse errors */ }
+        } catch (e) {
+          console.warn('⚠️ Error parsing message:', e);
+        }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.warn(`⚠️ WebSocket closed: code=${event.code}, reason=${event.reason || 'none'}`);
         statusEl.className = 'error';
         statusEl.textContent = '● Disconnected';
         if (reconnectAttempts < MAX_RECONNECT) {
           reconnectAttempts++;
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-          console.warn(`⏳ Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts})`);
+          console.log(`⏳ Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts})`);
           setTimeout(connect, delay);
         } else {
           statusEl.textContent = '⚠️ Failed – refresh page';
+          console.error('❌ Max reconnection attempts reached.');
         }
       };
 
       ws.onerror = (err) => {
-        // handled by onclose
+        console.error('❌ WebSocket error:', err);
       };
     }
 
