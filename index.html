@@ -66,12 +66,57 @@
     .log .entry { border-bottom: 1px solid #1f2937; padding: 2px 0; }
     .log .entry.win { color: #6ee7b7; }
     .log .entry.loss { color: #fca5a5; }
+    .log .entry.error { color: #fca5a5; background: #3b1a1a; padding: 2px 6px; border-radius: 4px; }
     .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .settings {
+      background: #14181f; border: 1px solid #2a3344; border-radius: 12px;
+      padding: 14px; margin-bottom: 14px;
+    }
+    .settings .row {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    }
+    .settings label { font-size: 13px; color: #94a3b8; white-space: nowrap; }
+    .settings input {
+      background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
+      padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; min-width: 150px;
+    }
+    .settings button {
+      background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer;
+      transition: .15s;
+    }
+    .settings button:hover { background: #2d3a4f; }
+    .settings .hint { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
+    .settings .error-msg { color: #fca5a5; font-size: 13px; margin-top: 6px; }
   </style>
 </head>
 <body>
   <h1>📊 Deriv Advanced Digit Finder <span style="font-size:14px;font-weight:400;color:#94a3b8;">All Volatility + 1s</span></h1>
-  
+
+  <!-- SETTINGS -->
+  <div class="settings" id="settingsPanel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span style="font-weight:600;">🔐 API Credentials</span>
+      <button id="toggleSettings" style="background:transparent; border:none; color:#94a3b8; cursor:pointer;">▼</button>
+    </div>
+    <div id="settingsBody">
+      <div class="row">
+        <label>App ID:</label>
+        <input type="text" id="appIdInput" placeholder="e.g. 1089 or 34f2He8A3Lb6APAzSdj2a" value="34f2He8A3Lb6APAzSdj2a" />
+        <label>API Token (optional):</label>
+        <input type="password" id="apiTokenInput" placeholder="Your API token" />
+        <button id="saveSettingsBtn">Save & Connect</button>
+        <button id="clearSettingsBtn" class="danger">Clear</button>
+      </div>
+      <div class="hint">
+        💡 App ID from your Deriv Dashboard. If you're using an OAuth app, <strong>you must provide an API token</strong> for authorization.
+      </div>
+      <div id="settingsError" class="error-msg" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- TOP BAR -->
   <div class="top-bar">
     <label>Method:
       <select id="method">
@@ -109,8 +154,7 @@
     ];
     const MAX_HISTORY = 500;
     const STORAGE_KEY = 'deriv_auto_history';
-    // ✅ YOUR APP ID (provided)
-    const DERIV_WS = 'wss://ws.derivws.com/websockets/v3?app_id=34f2He8A3Lb6APAzSdj2a';
+    const CRED_KEY = 'deriv_creds';
 
     // ─── state ───────────────────────────────────────────────────────
     const state = {};
@@ -126,6 +170,7 @@
     let ws = null, reconnectAttempts = 0, paused = false;
     const MAX_RECONNECT = 12;
     let globalTickCount = 0;
+    let isAuthorized = false;
 
     // ─── DOM refs ────────────────────────────────────────────────────
     const gridEl = document.getElementById('grid');
@@ -138,6 +183,35 @@
     const reconnectBtn = document.getElementById('reconnectBtn');
     const statusEl = document.getElementById('status');
     const tickCounterEl = document.getElementById('tickCounter');
+    const appIdInput = document.getElementById('appIdInput');
+    const apiTokenInput = document.getElementById('apiTokenInput');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    const clearSettingsBtn = document.getElementById('clearSettingsBtn');
+    const settingsError = document.getElementById('settingsError');
+    const toggleSettingsBtn = document.getElementById('toggleSettings');
+    const settingsBody = document.getElementById('settingsBody');
+
+    // ─── load saved credentials ─────────────────────────────────────
+    function loadCredentials() {
+      try {
+        const raw = localStorage.getItem(CRED_KEY);
+        if (raw) {
+          const cred = JSON.parse(raw);
+          if (cred.appId) appIdInput.value = cred.appId;
+          if (cred.token) apiTokenInput.value = cred.token;
+        }
+      } catch (_) {}
+    }
+    function saveCredentials(appId, token) {
+      try {
+        localStorage.setItem(CRED_KEY, JSON.stringify({ appId, token }));
+      } catch (_) {}
+    }
+    function clearCredentials() {
+      localStorage.removeItem(CRED_KEY);
+      appIdInput.value = '';
+      apiTokenInput.value = '';
+    }
 
     // ─── storage helpers ────────────────────────────────────────────
     function loadHistory() {
@@ -175,7 +249,7 @@
       return best;
     }
 
-    // ─── rendering (batched) ──────────────────────────────────────
+    // ─── rendering ──────────────────────────────────────────────────
     let pendingCards = new Set(), renderScheduled = false;
     function scheduleRender(id) { pendingCards.add(id); if (!renderScheduled) { renderScheduled = true; requestAnimationFrame(() => { pendingCards.forEach(id => renderCard(id)); pendingCards.clear(); renderScheduled = false; }); } }
 
@@ -216,8 +290,13 @@
       SYMBOLS.forEach(s => renderCard(s.id));
     }
 
-    function addLog(entry, isWin) {
-      const div = document.createElement('div'); div.className = 'entry ' + (isWin ? 'win' : 'loss'); div.textContent = entry;
+    function addLog(entry, isWin = false, isError = false) {
+      const div = document.createElement('div');
+      div.className = 'entry';
+      if (isWin) div.classList.add('win');
+      else if (isError) div.classList.add('error');
+      else div.classList.add('loss');
+      div.textContent = entry;
       logEl.prepend(div);
       while (logEl.children.length > 100) logEl.removeChild(logEl.lastChild);
     }
@@ -256,22 +335,77 @@
 
     // ─── WebSocket ──────────────────────────────────────────────────
     function connect() {
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      const appId = appIdInput.value.trim();
+      if (!appId) {
+        settingsError.textContent = '⚠️ Please enter your App ID.';
+        settingsError.style.display = 'block';
+        return;
+      }
+      settingsError.style.display = 'none';
+
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.close();
+      }
+
+      const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`;
       statusEl.className = 'connecting';
       statusEl.textContent = '● Connecting…';
-      ws = new WebSocket(DERIV_WS);
+      ws = new WebSocket(wsUrl);
+
+      let authSent = false;
 
       ws.onopen = () => {
         statusEl.className = 'live';
         statusEl.textContent = '● Live';
         reconnectAttempts = 0;
         console.log('🔌 Connected to Deriv');
-        SYMBOLS.forEach(s => ws.send(JSON.stringify({ ticks: s.id, subscribe: 1 })));
+
+        const token = apiTokenInput.value.trim();
+        if (token) {
+          // Send authorize request
+          ws.send(JSON.stringify({ authorize: token }));
+          authSent = true;
+          addLog('🔑 Sending authorization request…', false, false);
+        } else {
+          // No token — subscribe directly (works for public App IDs like 1089)
+          SYMBOLS.forEach(s => ws.send(JSON.stringify({ ticks: s.id, subscribe: 1 })));
+          addLog('📡 Subscribed to public tick stream (no auth)', false, false);
+        }
       };
 
       ws.onmessage = (msg) => {
         try {
           const data = JSON.parse(msg.data);
+
+          // Handle authorization response
+          if (data.authorize) {
+            if (data.error) {
+              const errMsg = data.error.message || 'Unknown error';
+              addLog(`❌ Authorization failed: ${errMsg}`, false, true);
+              settingsError.textContent = `Authorization error: ${errMsg}`;
+              settingsError.style.display = 'block';
+              statusEl.className = 'error';
+              statusEl.textContent = '● Auth Failed';
+              return;
+            } else {
+              isAuthorized = true;
+              addLog(`✅ Authorized as ${data.authorize.loginid || 'user'}`, true);
+              // Now subscribe to ticks
+              SYMBOLS.forEach(s => ws.send(JSON.stringify({ ticks: s.id, subscribe: 1 })));
+              addLog('📡 Subscribed to tick stream', false, false);
+            }
+            return;
+          }
+
+          // Handle errors
+          if (data.error) {
+            addLog(`❌ Server error: ${data.error.message}`, false, true);
+            settingsError.textContent = `Server error: ${data.error.message}`;
+            settingsError.style.display = 'block';
+            return;
+          }
+
+          // Handle tick data
           if (!data.tick) return;
           const sym = data.tick.symbol;
           if (!state[sym]) return;
@@ -282,12 +416,8 @@
 
           globalTickCount++;
           tickCounterEl.textContent = `📡 ${globalTickCount} ticks`;
-
-          // Debug: uncomment to see raw ticks in console
-          // console.log(`📊 ${sym} → ${quote} (${digit})`);
-
           processTick(sym, quote.toString(), digit);
-        } catch (e) { /* ignore */ }
+        } catch (e) { /* ignore parse errors */ }
       };
 
       ws.onclose = () => {
@@ -303,7 +433,9 @@
         }
       };
 
-      ws.onerror = () => { /* triggers onclose */ };
+      ws.onerror = (err) => {
+        // handled by onclose
+      };
     }
 
     // ─── clear history ─────────────────────────────────────────────
@@ -338,17 +470,53 @@
 
     pauseCheck.addEventListener('change', () => { paused = pauseCheck.checked; statusEl.textContent = paused ? '⏸ Paused' : '● Live'; statusEl.className = paused ? '' : 'live'; });
     clearBtn.addEventListener('click', clearHistory);
+
     reconnectBtn.addEventListener('click', () => { if (ws) { ws.close(); } connect(); });
 
     only1sCheck.addEventListener('change', () => {
       SYMBOLS.forEach(s => { const card = document.getElementById('card-'+s.id); if (!card) return; const is1s = s.id.includes('1S'); if (only1sCheck.checked && !is1s) card.classList.add('hidden'); else card.classList.remove('hidden'); });
     });
 
+    saveSettingsBtn.addEventListener('click', () => {
+      const appId = appIdInput.value.trim();
+      const token = apiTokenInput.value.trim();
+      if (!appId) {
+        settingsError.textContent = '⚠️ App ID is required.';
+        settingsError.style.display = 'block';
+        return;
+      }
+      settingsError.style.display = 'none';
+      saveCredentials(appId, token);
+      if (ws) { ws.close(); }
+      connect();
+    });
+
+    clearSettingsBtn.addEventListener('click', () => {
+      clearCredentials();
+      settingsError.style.display = 'none';
+      if (ws) { ws.close(); }
+    });
+
+    let settingsVisible = true;
+    toggleSettingsBtn.addEventListener('click', () => {
+      settingsVisible = !settingsVisible;
+      settingsBody.style.display = settingsVisible ? 'block' : 'none';
+      toggleSettingsBtn.textContent = settingsVisible ? '▼' : '▶';
+    });
+
     // ─── start ──────────────────────────────────────────────────────
+    loadCredentials();
     loadHistory();
     buildGrid();
     SYMBOLS.forEach(s => { if (state[s.id].history.length >= 20) { state[s.id].predicted = analyze(s.id); scheduleRender(s.id); } });
-    connect();
+
+    if (appIdInput.value.trim()) {
+      connect();
+    } else {
+      statusEl.textContent = '● Enter App ID above';
+      statusEl.className = 'connecting';
+    }
+
     setInterval(saveHistory, 10000);
     window.addEventListener('beforeunload', saveHistory);
     only1sCheck.dispatchEvent(new Event('change'));
