@@ -67,7 +67,7 @@
       padding: 10px; margin-top: 14px; max-height: 200px;
       overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6;
     }
-    .log .entry { border-bottom: 1px solid #1f2937; padding: 2px 0; }
+    .log .entry { border-bottom: 1px solid #1f2937; padding: 2px 0; white-space: pre-wrap; word-break: break-all; }
     .log .entry.win { color: #6ee7b7; }
     .log .entry.loss { color: #fca5a5; }
     .log .entry.error { color: #fca5a5; background: #3b1a1a; padding: 2px 6px; border-radius: 4px; }
@@ -78,12 +78,14 @@
     }
     .settings .row {
       display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      margin-bottom: 6px;
     }
     .settings label { font-size: 13px; color: #94a3b8; white-space: nowrap; }
-    .settings input {
+    .settings input, .settings textarea {
       background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
       padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; min-width: 150px;
     }
+    .settings textarea { min-height: 40px; font-family: monospace; resize: vertical; }
     .settings button {
       background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
       padding: 6px 14px; border-radius: 6px; cursor: pointer;
@@ -92,10 +94,11 @@
     .settings button:hover { background: #2d3a4f; }
     .settings .hint { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
     .settings .error-msg { color: #fca5a5; font-size: 13px; margin-top: 6px; }
+    .settings .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
   </style>
 </head>
 <body>
-  <h1>📊 Deriv Advanced Digit Finder <span style="font-size:14px;font-weight:400;color:#94a3b8;">All Volatility + 1s</span></h1>
+  <h1>📊 Deriv Advanced Digit Finder <span style="font-size:14px;font-weight:400;color:#94a3b8;">Volatility Markets</span></h1>
 
   <div class="settings" id="settingsPanel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -111,8 +114,13 @@
         <button id="saveSettingsBtn">Save & Connect</button>
         <button id="clearSettingsBtn" class="danger">Clear</button>
       </div>
+      <div class="row">
+        <label>Symbols (comma separated):</label>
+        <textarea id="symbolsInput" rows="2">R_10, R_25, R_50, R_75, R_100, R_10_1S, R_25_1S, R_50_1S, R_75_1S, R_100_1S</textarea>
+        <button id="loadDefaultSymbolsBtn" style="background:#1f2937; border:1px solid #374151; color:#e2e8f0; padding:6px 12px; border-radius:6px; cursor:pointer;">↺ Reset Defaults</button>
+      </div>
       <div class="hint">
-        💡 For public data, use App ID <code>1089</code> with no token. For your own app, enter your App ID and optional token.
+        💡 For public data, use App ID <code>1089</code> with no token. Edit symbols if needed (no spaces after commas).
       </div>
       <div id="settingsError" class="error-msg" style="display:none;"></div>
     </div>
@@ -141,31 +149,49 @@
 
   <script>
     // ─── config ───────────────────────────────────────────────────────
-    const SYMBOLS = [
-      { id: 'R_10', name: 'Vol 10' },
-      { id: 'R_25', name: 'Vol 25' },
-      { id: 'R_50', name: 'Vol 50' },
-      { id: 'R_75', name: 'Vol 75' },
-      { id: 'R_100', name: 'Vol 100' },
-      { id: 'R_10_1S', name: 'Vol 10 (1s)' },
-      { id: 'R_25_1S', name: 'Vol 25 (1s)' },
-      { id: 'R_50_1S', name: 'Vol 50 (1s)' },
-      { id: 'R_75_1S', name: 'Vol 75 (1s)' },
-      { id: 'R_100_1S', name: 'Vol 100 (1s)' }
-    ];
     const MAX_HISTORY = 500;
     const STORAGE_KEY = 'deriv_auto_history';
     const CRED_KEY = 'deriv_creds';
 
+    // Symbol definitions: { ticker: displayName }
+    const SYMBOL_DEFS = {
+      'R_10': 'Volatility 10',
+      'R_25': 'Volatility 25',
+      'R_50': 'Volatility 50',
+      'R_75': 'Volatility 75',
+      'R_100': 'Volatility 100',
+      'R_10_1S': 'Volatility 10 (1s)',
+      'R_25_1S': 'Volatility 25 (1s)',
+      'R_50_1S': 'Volatility 50 (1s)',
+      'R_75_1S': 'Volatility 75 (1s)',
+      'R_100_1S': 'Volatility 100 (1s)'
+    };
+
+    const DEFAULT_SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', 'R_10_1S', 'R_25_1S', 'R_50_1S', 'R_75_1S', 'R_100_1S'];
+
+    function getDisplayName(ticker) {
+      return SYMBOL_DEFS[ticker] || ticker;
+    }
+
     // ─── state ───────────────────────────────────────────────────────
+    let symbols = [];
     const state = {};
-    SYMBOLS.forEach(s => {
-      state[s.id] = {
-        history: [], counter: Array(10).fill(0), gaps: Array(10).fill(0),
-        lastPrice: '-', lastDigit: '-', predicted: '-', lastPrediction: undefined,
-        wins: 0, losses: 0, streak: 0, bestStreak: 0, totalPredictions: 0
-      };
-    });
+
+    function initSymbols(symList) {
+      symbols = symList.map(s => s.trim()).filter(s => s);
+      // Reset state for new symbols
+      symbols.forEach(sym => {
+        if (!state[sym]) {
+          state[sym] = {
+            history: [], counter: Array(10).fill(0), gaps: Array(10).fill(0),
+            lastPrice: '-', lastDigit: '-', predicted: '-', lastPrediction: undefined,
+            wins: 0, losses: 0, streak: 0, bestStreak: 0, totalPredictions: 0
+          };
+        }
+      });
+    }
+
+    initSymbols(DEFAULT_SYMBOLS);
 
     let soundEnabled = false, audioCtx = null;
     let ws = null, reconnectAttempts = 0, paused = false;
@@ -186,8 +212,10 @@
     const tickCounterEl = document.getElementById('tickCounter');
     const appIdInput = document.getElementById('appIdInput');
     const apiTokenInput = document.getElementById('apiTokenInput');
+    const symbolsInput = document.getElementById('symbolsInput');
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
     const clearSettingsBtn = document.getElementById('clearSettingsBtn');
+    const loadDefaultSymbolsBtn = document.getElementById('loadDefaultSymbolsBtn');
     const settingsError = document.getElementById('settingsError');
     const toggleSettingsBtn = document.getElementById('toggleSettings');
     const settingsBody = document.getElementById('settingsBody');
@@ -200,12 +228,13 @@
           const cred = JSON.parse(raw);
           if (cred.appId) appIdInput.value = cred.appId;
           if (cred.token) apiTokenInput.value = cred.token;
+          if (cred.symbols) symbolsInput.value = cred.symbols;
         }
       } catch (_) {}
     }
-    function saveCredentials(appId, token) {
+    function saveCredentials(appId, token, symStr) {
       try {
-        localStorage.setItem(CRED_KEY, JSON.stringify({ appId, token }));
+        localStorage.setItem(CRED_KEY, JSON.stringify({ appId, token, symbols: symStr }));
       } catch (_) {}
     }
     function clearCredentials() {
@@ -214,12 +243,12 @@
       apiTokenInput.value = '';
     }
 
-    // ─── storage helpers ────────────────────────────────────────────
+    // ─── storage helpers for history ──────────────────────────────
     function loadHistory() {
-      try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return; const data = JSON.parse(raw); SYMBOLS.forEach(s => { const id = s.id; if (data[id]) { state[id].history = data[id].slice(-MAX_HISTORY); state[id].counter = Array(10).fill(0); state[id].history.forEach(d => state[id].counter[d]++); } }); } catch (_) {}
+      try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return; const data = JSON.parse(raw); symbols.forEach(sym => { if (data[sym]) { state[sym].history = data[sym].slice(-MAX_HISTORY); state[sym].counter = Array(10).fill(0); state[sym].history.forEach(d => state[sym].counter[d]++); } }); } catch (_) {}
     }
     function saveHistory() {
-      try { const data = {}; SYMBOLS.forEach(s => data[s.id] = state[s.id].history); localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (_) {}
+      try { const data = {}; symbols.forEach(sym => data[sym] = state[sym].history); localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (_) {}
     }
 
     // ─── audio ──────────────────────────────────────────────────────
@@ -237,8 +266,8 @@
     }
 
     // ─── prediction ──────────────────────────────────────────────────
-    function analyze(symId) {
-      const st = state[symId], h = st.history;
+    function analyze(sym) {
+      const st = state[sym], h = st.history;
       if (h.length < 20) return '-';
       const method = methodSelect.value, c = st.counter;
       for (let d = 0; d < 10; d++) { let g = 0; for (let i = h.length-1; i>=0; i--) { if (h[i]===d) break; g++; } st.gaps[d]=g; }
@@ -252,10 +281,11 @@
 
     // ─── rendering ──────────────────────────────────────────────────
     let pendingCards = new Set(), renderScheduled = false;
-    function scheduleRender(id) { pendingCards.add(id); if (!renderScheduled) { renderScheduled = true; requestAnimationFrame(() => { pendingCards.forEach(id => renderCard(id)); pendingCards.clear(); renderScheduled = false; }); } }
+    function scheduleRender(sym) { pendingCards.add(sym); if (!renderScheduled) { renderScheduled = true; requestAnimationFrame(() => { pendingCards.forEach(s => renderCard(s)); pendingCards.clear(); renderScheduled = false; }); } }
 
-    function renderCard(id) {
-      const st = state[id], card = document.getElementById('card-'+id); if (!card) return;
+    function renderCard(sym) {
+      const st = state[sym], card = document.getElementById('card-'+sym); if (!card) return;
+      const displayName = getDisplayName(sym);
       const pred = st.predicted, win = pred !== '-' && st.lastDigit === pred && st.history.length >= 20;
       card.querySelector('.price').textContent = st.lastPrice + ' | ' + st.history.length + ' ticks';
       card.querySelector('.last').textContent = st.lastDigit;
@@ -283,12 +313,22 @@
 
     function buildGrid() {
       gridEl.innerHTML = '';
-      SYMBOLS.forEach(s => {
-        const card = document.createElement('div'); card.className = 'card'; card.id = 'card-'+s.id;
-        card.innerHTML = `<h2><span>${s.name}</span> <span style="font-size:11px;color:#6b7280;">${s.id}</span></h2><div class="price">-</div><div class="digits"><span class="last">-</span><span style="font-size:20px;color:#6b7280;">→</span><span class="pred">-</span></div><div class="match">Waiting…</div><div class="stats">-</div><div style="font-size:11px;color:#94a3b8;">Gap: <span class="gap">-</span></div><div class="bar"></div><div class="ticks"></div>`;
+      symbols.forEach(sym => {
+        const displayName = getDisplayName(sym);
+        const card = document.createElement('div'); card.className = 'card'; card.id = 'card-'+sym;
+        card.innerHTML = `
+          <h2><span>${displayName}</span> <span style="font-size:11px;color:#6b7280;">${sym}</span></h2>
+          <div class="price">-</div>
+          <div class="digits"><span class="last">-</span><span style="font-size:20px;color:#6b7280;">→</span><span class="pred">-</span></div>
+          <div class="match">Waiting…</div>
+          <div class="stats">-</div>
+          <div style="font-size:11px;color:#94a3b8;">Gap: <span class="gap">-</span></div>
+          <div class="bar"></div>
+          <div class="ticks"></div>
+        `;
         gridEl.appendChild(card);
       });
-      SYMBOLS.forEach(s => renderCard(s.id));
+      symbols.forEach(sym => renderCard(sym));
     }
 
     // ─── logging ────────────────────────────────────────────────────
@@ -301,17 +341,18 @@
       else div.classList.add('loss');
       div.textContent = entry;
       logEl.prepend(div);
-      while (logEl.children.length > 100) logEl.removeChild(logEl.lastChild);
+      while (logEl.children.length > 200) logEl.removeChild(logEl.lastChild);
     }
 
     // ─── process tick ─────────────────────────────────────────────
-    function processTick(symId, quote, digit) {
+    function processTick(sym, quote, digit) {
       if (paused) return;
-      const st = state[symId];
+      const st = state[sym];
+      if (!st) return;
       st.history.push(digit); if (st.history.length > MAX_HISTORY) st.history.shift();
       st.lastPrice = quote; st.lastDigit = digit;
       st.counter[digit] = (st.counter[digit] || 0) + 1;
-      const newPred = analyze(symId);
+      const newPred = analyze(sym);
       const oldPred = st.predicted;
       st.predicted = newPred;
 
@@ -321,11 +362,11 @@
         if (win) { st.wins++; st.streak++; if (st.streak > st.bestStreak) st.bestStreak = st.streak; }
         else { st.losses++; st.streak = 0; }
         if (win) {
-          const only1s = only1sCheck.checked, is1s = symId.includes('1S');
+          const only1s = only1sCheck.checked, is1s = sym.includes('1S');
           if (!only1s || is1s) {
             playBeep(is1s);
-            addLog(`✅ ${symId} | Predicted ${st.lastPrediction} → ${digit} HIT!`, 'win');
-            const card = document.getElementById('card-'+symId);
+            addLog(`✅ ${getDisplayName(sym)} | Predicted ${st.lastPrediction} → ${digit} HIT!`, 'win');
+            const card = document.getElementById('card-'+sym);
             if (card) { card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 800); }
             if (navigator.vibrate) navigator.vibrate([80,50,80]);
           }
@@ -333,7 +374,7 @@
         saveHistory();
       }
       st.lastPrediction = newPred;
-      scheduleRender(symId);
+      scheduleRender(sym);
     }
 
     // ─── WebSocket ──────────────────────────────────────────────────
@@ -346,18 +387,35 @@
       }
       settingsError.style.display = 'none';
 
+      // Read symbols from textarea
+      const symStr = symbolsInput.value.trim();
+      const symList = symStr.split(',').map(s => s.trim()).filter(s => s);
+      if (symList.length === 0) {
+        settingsError.textContent = '⚠️ Please enter at least one symbol.';
+        settingsError.style.display = 'block';
+        return;
+      }
+      // Update symbols and state
+      initSymbols(symList);
+      // Rebuild grid
+      buildGrid();
+      // Load history for new symbols
+      loadHistory();
+
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close();
       }
 
       const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`;
       console.log(`🔗 Connecting to ${wsUrl}`);
+      addLog(`🔗 Connecting to ${wsUrl}`, 'info');
       statusEl.className = 'connecting';
       statusEl.textContent = '● Connecting…';
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         console.log('✅ WebSocket opened');
+        addLog('✅ WebSocket opened', 'info');
         statusEl.className = 'live';
         statusEl.textContent = '● Live';
         reconnectAttempts = 0;
@@ -369,8 +427,12 @@
           addLog('🔑 Sending authorization request…', 'info');
         } else {
           console.log('📡 No token – subscribing to public ticks');
-          SYMBOLS.forEach(s => ws.send(JSON.stringify({ ticks: s.id, subscribe: 1 })));
-          addLog('📡 Subscribed to public tick stream (no auth)', 'info');
+          symbols.forEach(sym => {
+            const req = { ticks: sym, subscribe: 1 };
+            console.log(`📤 Sending subscribe: ${JSON.stringify(req)}`);
+            ws.send(JSON.stringify(req));
+          });
+          addLog(`📡 Subscribed to ${symbols.length} symbols (no auth)`, 'info');
         }
       };
 
@@ -395,8 +457,12 @@
               console.log('✅ Authorized as', data.authorize.loginid);
               addLog(`✅ Authorized as ${data.authorize.loginid || 'user'}`, 'win');
               // Subscribe to ticks after auth
-              SYMBOLS.forEach(s => ws.send(JSON.stringify({ ticks: s.id, subscribe: 1 })));
-              addLog('📡 Subscribed to tick stream', 'info');
+              symbols.forEach(sym => {
+                const req = { ticks: sym, subscribe: 1 };
+                console.log(`📤 Sending subscribe: ${JSON.stringify(req)}`);
+                ws.send(JSON.stringify(req));
+              });
+              addLog(`📡 Subscribed to ${symbols.length} symbols after auth`, 'info');
             }
             return;
           }
@@ -404,7 +470,7 @@
           // Handle server errors
           if (data.error) {
             console.error('❌ Server error:', data.error);
-            addLog(`❌ Server error: ${data.error.message}`, 'error');
+            addLog(`❌ Server error: ${data.error.message} (code: ${data.error.code})`, 'error');
             settingsError.textContent = `Server error: ${data.error.message}`;
             settingsError.style.display = 'block';
             return;
@@ -413,7 +479,10 @@
           // Handle tick data
           if (!data.tick) return;
           const sym = data.tick.symbol;
-          if (!state[sym]) return;
+          if (!state[sym]) {
+            console.warn(`⚠️ Unknown symbol: ${sym}`);
+            return;
+          }
           const quote = data.tick.quote;
           if (quote === undefined || quote === null) return;
           const digit = parseInt(quote.toString().slice(-1));
@@ -429,43 +498,49 @@
 
       ws.onclose = (event) => {
         console.warn(`⚠️ WebSocket closed: code=${event.code}, reason=${event.reason || 'none'}`);
+        addLog(`⚠️ WebSocket closed (code: ${event.code})`, 'error');
         statusEl.className = 'error';
         statusEl.textContent = '● Disconnected';
         if (reconnectAttempts < MAX_RECONNECT) {
           reconnectAttempts++;
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
           console.log(`⏳ Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts})`);
+          addLog(`⏳ Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts})`, 'info');
           setTimeout(connect, delay);
         } else {
           statusEl.textContent = '⚠️ Failed – refresh page';
           console.error('❌ Max reconnection attempts reached.');
+          addLog('❌ Max reconnection attempts reached. Please refresh.', 'error');
         }
       };
 
       ws.onerror = (err) => {
         console.error('❌ WebSocket error:', err);
+        addLog(`❌ WebSocket error: ${err.message || 'unknown'}`, 'error');
       };
     }
 
     // ─── clear history ─────────────────────────────────────────────
     function clearHistory() {
       if (!confirm('Clear all history and stats?')) return;
-      SYMBOLS.forEach(s => {
-        const st = state[s.id];
-        st.history = []; st.counter = Array(10).fill(0); st.gaps = Array(10).fill(0);
-        st.lastPrice = '-'; st.lastDigit = '-'; st.predicted = '-'; st.lastPrediction = undefined;
-        st.wins = 0; st.losses = 0; st.streak = 0; st.bestStreak = 0; st.totalPredictions = 0;
+      symbols.forEach(sym => {
+        const st = state[sym];
+        if (st) {
+          st.history = []; st.counter = Array(10).fill(0); st.gaps = Array(10).fill(0);
+          st.lastPrice = '-'; st.lastDigit = '-'; st.predicted = '-'; st.lastPrediction = undefined;
+          st.wins = 0; st.losses = 0; st.streak = 0; st.bestStreak = 0; st.totalPredictions = 0;
+        }
       });
       localStorage.removeItem(STORAGE_KEY);
       logEl.innerHTML = '';
-      SYMBOLS.forEach(s => renderCard(s.id));
+      symbols.forEach(sym => renderCard(sym));
       statusEl.textContent = '● Cleared';
       setTimeout(() => statusEl.textContent = '● Live', 1000);
     }
 
     // ─── event listeners ──────────────────────────────────────────
     methodSelect.addEventListener('change', () => {
-      SYMBOLS.forEach(s => { if (state[s.id].history.length >= 20) { state[s.id].predicted = analyze(s.id); scheduleRender(s.id); } });
+      symbols.forEach(sym => { if (state[sym] && state[sym].history.length >= 20) { state[sym].predicted = analyze(sym); scheduleRender(sym); } });
     });
 
     soundBtn.addEventListener('click', () => {
@@ -483,19 +558,25 @@
     reconnectBtn.addEventListener('click', () => { if (ws) { ws.close(); } connect(); });
 
     only1sCheck.addEventListener('change', () => {
-      SYMBOLS.forEach(s => { const card = document.getElementById('card-'+s.id); if (!card) return; const is1s = s.id.includes('1S'); if (only1sCheck.checked && !is1s) card.classList.add('hidden'); else card.classList.remove('hidden'); });
+      symbols.forEach(sym => { const card = document.getElementById('card-'+sym); if (!card) return; const is1s = sym.includes('1S'); if (only1sCheck.checked && !is1s) card.classList.add('hidden'); else card.classList.remove('hidden'); });
     });
 
     saveSettingsBtn.addEventListener('click', () => {
       const appId = appIdInput.value.trim();
       const token = apiTokenInput.value.trim();
+      const symStr = symbolsInput.value.trim();
       if (!appId) {
         settingsError.textContent = '⚠️ App ID is required.';
         settingsError.style.display = 'block';
         return;
       }
+      if (!symStr) {
+        settingsError.textContent = '⚠️ Please enter at least one symbol.';
+        settingsError.style.display = 'block';
+        return;
+      }
       settingsError.style.display = 'none';
-      saveCredentials(appId, token);
+      saveCredentials(appId, token, symStr);
       if (ws) { ws.close(); }
       connect();
     });
@@ -504,6 +585,10 @@
       clearCredentials();
       settingsError.style.display = 'none';
       if (ws) { ws.close(); }
+    });
+
+    loadDefaultSymbolsBtn.addEventListener('click', () => {
+      symbolsInput.value = DEFAULT_SYMBOLS.join(', ');
     });
 
     let settingsVisible = true;
@@ -515,9 +600,18 @@
 
     // ─── start ──────────────────────────────────────────────────────
     loadCredentials();
+    // Load symbols from saved credentials if any
+    const savedCred = localStorage.getItem(CRED_KEY);
+    if (savedCred) {
+      try {
+        const cred = JSON.parse(savedCred);
+        if (cred.symbols) symbolsInput.value = cred.symbols;
+      } catch (_) {}
+    }
+    initSymbols(symbolsInput.value.split(',').map(s => s.trim()).filter(s => s));
     loadHistory();
     buildGrid();
-    SYMBOLS.forEach(s => { if (state[s.id].history.length >= 20) { state[s.id].predicted = analyze(s.id); scheduleRender(s.id); } });
+    symbols.forEach(sym => { if (state[sym] && state[sym].history.length >= 20) { state[sym].predicted = analyze(sym); scheduleRender(sym); } });
 
     if (appIdInput.value.trim()) {
       connect();
