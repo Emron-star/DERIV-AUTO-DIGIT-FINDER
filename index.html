@@ -1,826 +1,2561 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Multi‑Market Signal Scanner</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { background: #0b0d12; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 12px; }
-    h1 { font-size: 20px; margin: 6px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .top-bar {
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-      background: #14181f; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px;
-      border: 1px solid #2a3344;
-    }
-    .top-bar select, .top-bar button, .top-bar label {
-      background: #1f2937; color: #e2e8f0; border: 1px solid #374151;
-      padding: 6px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
-    }
-    .top-bar button { transition: background .2s; }
-    .top-bar button.on { background: #065f46; border-color: #10b981; }
-    .top-bar button.danger { border-color: #b91c1c; color: #fca5a5; }
-    .top-bar button.danger:hover { background: #3b1a1a; }
-    .top-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-    #status {
-      font-size: 13px; font-weight: 600;
-      padding: 4px 10px; border-radius: 20px;
-      background: #1f2937; margin-left: auto;
-    }
-    #status.live { color: #6ee7b7; }
-    #status.connecting { color: #fbbf24; }
-    #status.error { color: #fca5a5; }
-    #tickCounter { font-size: 12px; color: #94a3b8; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 14px;
-    }
-    .card {
-      background: #14181f;
-      border: 1px solid #2a3344;
-      border-radius: 14px;
-      padding: 14px 12px;
-      transition: border-color .2s, transform .15s, box-shadow .15s;
-      position: relative;
-    }
-    .card .title {
-      font-weight: 600; font-size: 15px; display: flex; justify-content: space-between;
-    }
-    .card .price { font-family: monospace; font-size: 12px; color: #94a3b8; margin: 2px 0 4px; }
-    .card .digits { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; }
-    .card .digits .last { font-size: 32px; font-weight: 800; color: #60a5fa; }
-    .card .digits .pred { font-size: 32px; font-weight: 800; color: #fbbf24; }
-    .card .info { font-size: 12px; color: #94a3b8; }
-    .card .dots { font-size: 20px; letter-spacing: 6px; margin: 4px 0; }
-    .card .result { text-align: center; padding: 4px; border-radius: 6px; font-weight: 600; }
-    .card .result.win { background: #064e3b; color: #6ee7b7; }
-    .card .result.loss { background: #3b1a1a; color: #fca5a5; }
-    .card .result.pending { background: #1f2937; color: #94a3b8; }
-    .card.win { border-color: #10b981; }
-    .card.loss { border-color: #f87171; }
-    .signal-panel {
-      background: #14181f; border: 1px solid #2a3344; border-radius: 14px;
-      padding: 16px; margin-bottom: 14px; text-align: center;
-      position: relative;
-      min-height: 120px;
-    }
-    .signal-panel .phase-title {
-      font-size: 22px; font-weight: 700; margin: 4px 0;
-      transition: color 0.2s;
-    }
-    .signal-panel .timer-display {
-      font-size: 56px; font-weight: 800; font-family: monospace;
-      letter-spacing: 4px; margin: 4px 0;
-      transition: color 0.2s;
-    }
-    .signal-panel .timer-display.blink {
-      animation: blink 0.5s infinite alternate;
-    }
-    @keyframes blink { 0% { opacity: 1; } 100% { opacity: 0.4; } }
-    .signal-panel .status-text {
-      font-size: 16px; font-weight: 600; margin: 2px 0;
-    }
-    .signal-panel .progress-bar {
-      width: 100%; height: 6px; background: #1f2937; border-radius: 4px;
-      margin: 6px 0; overflow: hidden;
-    }
-    .signal-panel .progress-bar .fill {
-      height: 100%; background: #7ec8e3; width: 0%; border-radius: 4px;
-      transition: width 0.3s linear;
-    }
-    .signal-panel .summary {
-      font-size: 14px; color: #94a3b8; margin-top: 6px;
-      max-height: 60px; overflow-y: auto;
-    }
-    .settings {
-      background: #14181f; border: 1px solid #2a3344; border-radius: 12px;
-      padding: 14px; margin-bottom: 14px;
-    }
-    .settings .row {
-      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-      margin-bottom: 6px;
-    }
-    .settings label { font-size: 13px; color: #94a3b8; white-space: nowrap; }
-    .settings input, .settings select {
-      background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
-      padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; min-width: 120px;
-    }
-    .settings button {
-      background: #1f2937; border: 1px solid #374151; color: #e2e8f0;
-      padding: 6px 14px; border-radius: 6px; cursor: pointer;
-      transition: .15s;
-    }
-    .settings button:hover { background: #2d3a4f; }
-    .settings .hint { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
-    .settings .error-msg { color: #fca5a5; font-size: 13px; margin-top: 6px; }
-    .log {
-      background: #14181f; border: 1px solid #2a3344; border-radius: 10px;
-      padding: 10px; margin-top: 14px; max-height: 200px;
-      overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6;
-    }
-    .log .entry { border-bottom: 1px solid #1f2937; padding: 2px 0; white-space: pre-wrap; word-break: break-all; }
-    .log .entry.win { color: #6ee7b7; }
-    .log .entry.loss { color: #fca5a5; }
-    .log .entry.error { color: #fca5a5; background: #3b1a1a; padding: 2px 6px; border-radius: 4px; }
-    .log .entry.info { color: #93c5fd; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.derivws.com wss://api.derivws.com; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="dark">
+<title>EMRON Autopilot · Market Intelligence</title>
+<style>
+:root{color-scheme:dark;--bg:#030907;--panel:#07130e;--panel2:#0a1c13;--line:#17432c;--line2:#24663f;--text:#d9f7e4;--muted:#7ba98b;--green:#44ff9a;--mint:#8effc2;--amber:#ffd166;--red:#ff627c;--cyan:#67e8f9;--r:14px;--shadow:0 12px 40px #0007}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 10% -20%,#0b2a1a 0,transparent 44%),var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.16;background-image:linear-gradient(#1d57371c 1px,transparent 1px),linear-gradient(90deg,#1d57371c 1px,transparent 1px);background-size:28px 28px;mask-image:linear-gradient(to bottom,#000,transparent 90%);z-index:-1}
+button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}a{color:inherit;text-decoration:none}.mono,.num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.topbar{position:sticky;top:0;z-index:20;border-bottom:1px solid var(--line);background:#030907eF;backdrop-filter:blur(14px)}.topinner{max-width:1440px;margin:auto;padding:12px 22px;display:flex;align-items:center;gap:18px}.brand{display:flex;align-items:baseline;gap:8px;font-weight:900;letter-spacing:.08em;font-size:18px;white-space:nowrap}.brand strong{color:var(--green)}.brand small{font:10px ui-monospace,monospace;color:var(--muted);letter-spacing:.12em}.topspacer{flex:1}.status-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line2);border-radius:99px;padding:5px 10px;color:var(--muted);font:11px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}.dot{width:7px;height:7px;background:#54715d;border-radius:50%;display:inline-block}.status-chip.on{color:var(--green);border-color:#247447}.status-chip.on .dot{background:var(--green);box-shadow:0 0 10px #44ff9a99}.status-chip.warn{color:var(--amber);border-color:#685023}.status-chip.warn .dot{background:var(--amber)}
+.shell{max-width:1440px;margin:0 auto;padding:20px 22px 42px}.intro{display:flex;justify-content:space-between;gap:22px;align-items:flex-end;margin:10px 0 18px}.kicker{color:var(--green);font:11px ui-monospace,monospace;letter-spacing:.18em;text-transform:uppercase}.intro h1{font-size:clamp(24px,3vw,38px);line-height:1.1;margin:7px 0 9px;letter-spacing:-.035em}.intro h1 span{color:var(--green)}.intro p{margin:0;color:var(--muted);max-width:720px}.intro-right{text-align:right;min-width:160px}.clock{font:22px ui-monospace,monospace;color:var(--green)}.mini-note{font-size:11px;color:var(--muted)}
+.metrics{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin:18px 0}.metric{background:linear-gradient(145deg,#0a1d13,#06100b);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}.metric label{display:block;color:var(--muted);font:10px ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px}.metric b{font:700 21px ui-monospace,monospace;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metric small{display:block;margin-top:3px;font-size:10px;color:var(--muted)}
+.layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;align-items:start}.panel{background:linear-gradient(150deg,#0a1a11f5,#06100bf5);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);min-width:0;overflow:hidden}.panelhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid #17432c99}.panelhead h2,.panelhead h3{margin:0;font-size:13px;font-weight:800;letter-spacing:.04em}.panelhead h2 span,.panelhead h3 span{color:var(--green)}.panelbody{padding:14px 16px}.eyebrow{font:10px ui-monospace,monospace;color:var(--muted);letter-spacing:.13em;text-transform:uppercase}.divider{height:1px;background:#17432c99;margin:15px 0}.field{margin:11px 0}.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}.field input,.field select{width:100%;background:#020805;border:1px solid var(--line2);border-radius:9px;padding:10px 11px;color:var(--text);outline:none;min-width:0}.field input:focus,.field select:focus{border-color:var(--green);box-shadow:0 0 0 2px #44ff9a1a}.two-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}.btn{border:1px solid var(--line2);border-radius:9px;background:#0a1c12;color:var(--text);padding:10px 12px;font-weight:700;transition:background .15s,border .15s}.btn:hover:not(:disabled){border-color:var(--green)}.btn.active{background:#123b23;border-color:var(--green);color:var(--mint)}.btn.primary{background:var(--green);border-color:var(--green);color:#031108}.btn.primary:hover:not(:disabled){background:#8effbd}.btn.danger{color:#ff8b9d;border-color:#793449;background:#251016}.full{width:100%}.hint{font-size:11px;color:var(--muted);margin:8px 0 0}.risk-box{border:1px solid #574b23;background:#211b0a;border-radius:10px;padding:10px;font-size:11px;color:#f5d78b;margin:12px 0}.small-check{display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--muted);margin-top:9px}.small-check input{accent-color:var(--green);margin-top:4px}
+.maincol{display:grid;gap:14px;min-width:0}.section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 2px 10px}.section-title h2{font-size:15px;margin:0}.section-title p{margin:2px 0 0;color:var(--muted);font-size:11px}.market-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.market-card{background:linear-gradient(150deg,#0b1d12,#06100b);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0;cursor:pointer;transition:transform .15s,border-color .15s,background .15s;outline:none}.market-card:hover{transform:translateY(-1px);border-color:#328656}.market-card.selected{border-color:var(--green);box-shadow:inset 0 0 0 1px #44ff9a30;background:linear-gradient(150deg,#10321d,#07140c)}.market-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.market-name{font-size:11px;color:var(--muted)}.market-symbol{font:700 13px ui-monospace,monospace}.market-price{font:700 clamp(17px,2vw,24px) ui-monospace,monospace;margin:12px 0 5px;overflow:hidden;text-overflow:ellipsis}.market-change{font:11px ui-monospace,monospace}.market-bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #17432c88;margin-top:10px;padding-top:9px}.market-state{font:10px ui-monospace,monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pill{font:9px ui-monospace,monospace;padding:3px 6px;border:1px solid var(--line2);border-radius:5px;color:var(--muted);white-space:nowrap}.pill.watch{border-color:#705623;color:var(--amber)}.pill.setup{border-color:#237846;color:var(--green)}.pill.bad{border-color:#793449;color:var(--red)}
+.twopanels{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:14px}.terminal{height:210px;overflow:auto;background:#020704;border:1px solid #123b24;border-radius:9px;padding:10px 12px;font:11px/1.6 ui-monospace,monospace;color:#a4f4bd;position:relative}.terminal:before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,transparent 0 3px,#4cff9a06 4px);opacity:.7}.term-line{position:relative;display:flex;gap:9px;overflow-wrap:anywhere}.term-time{color:#4b885f;flex:0 0 58px}.term-line.info .term-msg{color:#a4f4bd}.term-line.warn .term-msg{color:var(--amber)}.term-line.error .term-msg{color:#ff8ba0}.term-line.good .term-msg{color:var(--green)}.term-cursor{display:inline-block;width:6px;height:12px;background:var(--green);vertical-align:middle;animation:blink 1s step-end infinite;margin-left:4px}@keyframes blink{50%{opacity:0}}
+.gate-status{padding:14px 15px;border-radius:10px;background:#020704;border:1px solid var(--line);margin-bottom:12px}.gate-status strong{font:700 18px ui-monospace,monospace;display:block;color:var(--amber)}.gate-status small{font-size:11px;color:var(--muted);display:block;margin-top:4px}.gate-status.good strong{color:var(--green)}.gate-status.bad strong{color:var(--red)}.gate-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gate-metric{border:1px solid #17432c99;border-radius:8px;padding:9px;background:#07120b}.gate-metric small{display:block;color:var(--muted);font-size:10px}.gate-metric b{display:block;margin-top:3px;font:700 16px ui-monospace,monospace}.gate-foot{font-size:10px;color:var(--muted);margin-top:10px;line-height:1.5}
+.digit-bars{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:7px;align-items:end;height:114px;padding:9px 0 0}.digit-col{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;min-width:0}.digit-count{font:9px ui-monospace,monospace;color:var(--muted)}.bar-track{height:77px;width:100%;display:flex;align-items:flex-end;background:#07130c;border-radius:4px 4px 0 0;overflow:hidden}.bar-fill{width:100%;background:linear-gradient(to top,#126438,#44ff9a);min-height:2px;border-radius:3px 3px 0 0;transition:height .2s}.digit-num{font:10px ui-monospace,monospace}.digits-note{margin-top:10px;color:var(--muted);font-size:10px}
+.table-wrap{overflow:auto;max-height:330px}table{width:100%;border-collapse:collapse;font-size:11px;min-width:570px}th{text-align:left;color:var(--muted);font:10px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.06em;background:#07140d;position:sticky;top:0}td,th{padding:10px 9px;border-bottom:1px solid #17432c88}tbody tr:hover{background:#0c1d12}.positive{color:var(--green)}.negative{color:var(--red)}.neutral{color:var(--muted)}.trade-result{font-weight:800}.logline{font-size:11px;color:var(--muted)}.reconcile{display:none;margin-top:10px}.reconcile.show{display:block}.footer{color:#52735e;font-size:10px;padding:22px 0;text-align:center;letter-spacing:.04em}.split-report{margin-top:10px;color:var(--muted);font-size:11px;line-height:1.55;display:grid;gap:7px}.split-row{display:grid;grid-template-columns:1.1fr repeat(3,minmax(0,1fr));gap:8px;border:1px solid #17432c88;padding:8px;border-radius:8px}.scan-overlay{position:fixed;inset:0;z-index:50;background:#020805f2;display:none;align-items:center;justify-content:center;padding:20px}.scan-overlay.show{display:flex}.scan-box{width:min(620px,100%);border:1px solid var(--green);background:#031009;border-radius:16px;padding:26px;box-shadow:0 0 70px #44ff9a18}.scan-box h2{margin:8px 0;color:var(--green);font:800 clamp(25px,4vw,42px) ui-monospace,monospace}.scan-track{height:5px;background:#12271a;border-radius:999px;overflow:hidden;margin:20px 0}.scan-track span{display:block;height:100%;width:0;background:var(--green);animation:scanbar 2.4s ease-out forwards}@keyframes scanbar{to{width:100%}}.scan-status{font:11px/1.8 ui-monospace,monospace;color:var(--muted)}dialog{background:#07130e;color:var(--text);border:1px solid var(--line2);border-radius:14px;padding:22px;max-width:min(560px,calc(100vw - 24px));box-shadow:var(--shadow)}dialog::backdrop{background:#000b}.dialog-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+@media(max-width:1050px){.layout{grid-template-columns:280px minmax(0,1fr)}.market-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.twopanels{grid-template-columns:1fr}}
+@media(max-width:760px){.topinner{padding:10px 12px;gap:8px;flex-wrap:wrap}.brand{font-size:16px}.brand small{display:none}.topspacer{flex:1}.topinner .status-chip{font-size:9px;padding:4px 7px}.shell{padding:14px 10px 30px}.intro{align-items:flex-start}.intro-right{display:none}.layout{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.metric{padding:10px}.metric b{font-size:17px}.market-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.market-card{padding:9px}.market-price{font-size:17px;margin:9px 0 4px}.panelbody{padding:12px}.topinner .status-chip:first-of-type{margin-left:auto}}
+@media(max-width:390px){.market-grid{grid-template-columns:1fr}.intro h1{font-size:24px}.metrics{grid-template-columns:1fr 1fr}.status-chip{letter-spacing:0}}
+
+/* additions for the merged trading engine */
+.scan-overlay{overflow:hidden}.scan-overlay canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.5}.scan-box{position:relative;z-index:1;background:#031009ee}
+.scan-track span{animation-duration:3.5s;animation-timing-function:linear}
+.scan-log{display:flex;flex-direction:column;justify-content:flex-end;height:176px;overflow:hidden;font:10px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--green);text-shadow:0 0 6px #44ff9a55;overflow-wrap:anywhere}
+.scan-log .lvl-warn{color:var(--amber)}.scan-log .lvl-error{color:#ff8ba0}.scan-log .lvl-signal{color:var(--cyan)}
+.pill.on{border-color:#237846;color:var(--green)}
+#stratParams .eyebrow{margin:14px 0 2px}#mixBox{margin:10px 0 2px}
+.status-open{color:var(--cyan)}.status-pending{color:var(--amber)}.status-unknown{color:var(--red)}
+td.why{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn.slim{padding:5px 9px;font-size:11px}
+.metric b{font-size:clamp(14px,1.4vw,20px)}
+.term-time{flex:0 0 68px;white-space:nowrap}
+
+</style>
 </head>
 <body>
-  <h1>📊 Multi‑Market Signal Scanner <span style="font-size:14px;font-weight:400;color:#94a3b8;">All Volatility + 1s</span></h1>
-
-  <div class="settings">
-    <div class="row">
-      <label>App ID:</label>
-      <input type="text" id="appIdInput" placeholder="e.g. 1089" value="1089" />
-      <label>API Token (optional):</label>
-      <input type="password" id="apiTokenInput" placeholder="Paste token for OAuth" />
-      <button id="saveSettingsBtn">Save & Connect</button>
-      <button id="clearSettingsBtn" class="danger">Clear</button>
-    </div>
-    <div class="row">
-      <button id="startSignalBtn" style="background:#065f46; border-color:#10b981;">▶ Start Signal</button>
-      <button id="stopSignalBtn" class="danger">⏹ Stop</button>
-      <span id="status" class="connecting">● Connecting…</span>
-      <span id="tickCounter">📡 0 ticks</span>
-    </div>
-    <div class="hint">💡 For public data, use App ID <code>1089</code> with no token. All 10 Volatility markets will be scanned.</div>
-    <div id="settingsError" class="error-msg" style="display:none;"></div>
-  </div>
-
-  <!-- Signal Panel -->
-  <div class="signal-panel" id="signalPanel">
-    <div class="phase-title" id="phaseTitle">⏳ IDLE</div>
-    <div class="timer-display" id="timerDisplay">--</div>
-    <div class="status-text" id="statusText">Press Start to begin</div>
-    <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
-    <div class="summary" id="summary"></div>
-  </div>
-
-  <!-- Grid -->
-  <div id="grid" class="grid"></div>
-  <div class="log" id="log"></div>
-
-  <script>
-    // ─── CONSTANTS ────────────────────────────────────────────────────
-    const SYMBOLS = [
-      { id: 'R_10', name: 'Volatility 10' },
-      { id: 'R_25', name: 'Volatility 25' },
-      { id: 'R_50', name: 'Volatility 50' },
-      { id: 'R_75', name: 'Volatility 75' },
-      { id: 'R_100', name: 'Volatility 100' },
-      { id: 'R_10_1S', name: 'Volatility 10 (1s)' },
-      { id: 'R_25_1S', name: 'Volatility 25 (1s)' },
-      { id: 'R_50_1S', name: 'Volatility 50 (1s)' },
-      { id: 'R_75_1S', name: 'Volatility 75 (1s)' },
-      { id: 'R_100_1S', name: 'Volatility 100 (1s)' }
-    ];
-    const MAX_HISTORY = 500;
-    const COLLECT_THRESHOLD = 60;  // ticks needed before starting timer
-
-    // ─── STATE ──────────────────────────────────────────────────────
-    const marketData = {};
-    SYMBOLS.forEach(s => {
-      marketData[s.id] = {
-        history: [],
-        gaps: Array(10).fill(0),
-        counts: Array(10).fill(0),
-        lastPrice: '-',
-        lastDigit: '-',
-        predicted: '-',
-        windowTicks: [],
-        windowOpen: false,
-        windowResolved: false,
-        win: false
-      };
-    });
-
-    let ws = null, reconnectAttempts = 0, paused = false;
-    const MAX_RECONNECT = 12;
-    let globalTickCount = 0;
-    let soundEnabled = false, audioCtx = null;
-    let signalRunning = false;
-    let signalPhase = 'idle'; // idle, collecting, ready, go, window, result
-    let signalCountdown = 15;
-    let signalTimerInterval = null;
-    let allMarketsReady = false;
-    let windowActive = false;
-
-    // ─── DOM REFS ──────────────────────────────────────────────────
-    const gridEl = document.getElementById('grid');
-    const logEl = document.getElementById('log');
-    const appIdInput = document.getElementById('appIdInput');
-    const apiTokenInput = document.getElementById('apiTokenInput');
-    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-    const clearSettingsBtn = document.getElementById('clearSettingsBtn');
-    const startSignalBtn = document.getElementById('startSignalBtn');
-    const stopSignalBtn = document.getElementById('stopSignalBtn');
-    const statusEl = document.getElementById('status');
-    const tickCounterEl = document.getElementById('tickCounter');
-    const settingsError = document.getElementById('settingsError');
-    const phaseTitle = document.getElementById('phaseTitle');
-    const timerDisplay = document.getElementById('timerDisplay');
-    const statusText = document.getElementById('statusText');
-    const progressFill = document.getElementById('progressFill');
-    const summaryEl = document.getElementById('summary');
-
-    // ─── AUDIO ──────────────────────────────────────────────────────
-    function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-    function playBeep(freq, duration = 0.12) {
-      if (!soundEnabled || !audioCtx) return;
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0, audioCtx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-      osc.start(); osc.stop(audioCtx.currentTime + duration);
-    }
-    function playDoubleBeep() {
-      playBeep(1200, 0.35);
-      setTimeout(() => playBeep(1200, 0.35), 400);
-    }
-
-    // ─── PREDICTION LOGIC (per market) ────────────────────────────
-    function computePrediction(sym) {
-      const md = marketData[sym];
-      if (!md || md.history.length < 20) return null;
-      const h = md.history;
-      // Update counts
-      const counts = Array(10).fill(0);
-      h.forEach(d => counts[d]++);
-      md.counts = counts;
-      // Compute gaps: for each digit, distance from end to last occurrence; if never found, gap = history.length
-      const gaps = Array(10).fill(0);
-      for (let d = 0; d < 10; d++) {
-        let g = 0;
-        let found = false;
-        for (let i = h.length - 1; i >= 0; i--) {
-          if (h[i] === d) { found = true; break; }
-          g++;
-        }
-        gaps[d] = found ? g : h.length;
-      }
-      md.gaps = gaps;
-      // Pick digit with maximum gap; if tie, pick the one with smallest count (rarest)
-      let maxGap = -1;
-      let bestDigits = [];
-      for (let d = 0; d < 10; d++) {
-        if (gaps[d] > maxGap) {
-          maxGap = gaps[d];
-          bestDigits = [d];
-        } else if (gaps[d] === maxGap) {
-          bestDigits.push(d);
-        }
-      }
-      let pred = bestDigits[0];
-      if (bestDigits.length > 1) {
-        // Tie-break: pick the one with lowest count
-        let minCount = Infinity;
-        for (let d of bestDigits) {
-          if (counts[d] < minCount) {
-            minCount = counts[d];
-            pred = d;
-          }
-        }
-      }
-      return pred;
-    }
-
-    // ─── UI RENDERING ──────────────────────────────────────────────
-    function buildGrid() {
-      gridEl.innerHTML = '';
-      SYMBOLS.forEach(s => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.id = 'card-' + s.id;
-        card.innerHTML = `
-          <div class="title"><span>${s.name}</span><span style="font-size:11px;color:#6b7280;">${s.id}</span></div>
-          <div class="price">-</div>
-          <div class="digits">
-            <span class="last">-</span>
-            <span style="color:#6b7280;">→</span>
-            <span class="pred">-</span>
+<header class="topbar"><div class="topinner">
+  <a class="brand" href="#top" aria-label="EMRON Autopilot"><strong>EMRON</strong><span>///</span><small>AUTOPILOT · MARKET INTELLIGENCE</small></a>
+  <div class="topspacer"></div>
+  <span class="status-chip" id="feedChip"><i class="dot"></i><span id="feedText">FEED STARTING</span></span>
+  <span class="status-chip" id="connChip"><i class="dot"></i><span id="connText">ACCOUNT OFFLINE</span></span>
+</div></header>
+<main class="shell" id="top">
+  <section class="intro">
+    <div><div class="kicker">SYSTEM 02 / LIVE MARKET SCANNER + AUTO TRADER</div><h1>Scan the market.<br><span>Trade the signal. Know the risk.</span></h1><p>Live tick history, real digit analysis and four strategies — Even/Odd, Over 8, Matches and Only Ups/Downs — with recovery staking, take-profit and stop-loss. Run it as research, on paper, or on your Deriv demo or real account.</p></div>
+    <div class="intro-right"><div class="clock" id="clock">--:--:--</div><div class="mini-note">LOCAL SYSTEM TIME · AUTO REFRESH</div></div>
+  </section>
+  <section class="metrics" aria-label="Session statistics">
+    <div class="metric"><label>Tick cache / selected</label><b id="mTicks">0 / 1000</b><small>Historical + live ticks</small></div>
+    <div class="metric"><label>Live signals</label><b id="mSetups">0 / 10</b><small>Markets where the rule fires now</small></div>
+    <div class="metric"><label>Account balance</label><b id="sBal">—</b><small id="balanceNote">Start a paper run or connect an account</small></div>
+    <div class="metric"><label>Session net P&amp;L</label><b id="sPnl">0.00</b><small>Settled contracts</small></div>
+    <div class="metric"><label>Win rate / runs</label><b id="sWr">— / 0</b><small id="lossRunNote">Wins 0 · Losses 0 · Step 0</small></div>
+    <div class="metric"><label>Total stake</label><b id="sStake">0.00</b><small>Settled exposure</small></div>
+    <div class="metric"><label>Total return</label><b id="sReturn">0.00</b><small>Payout of winning contracts</small></div>
+  </section>
+  <div class="layout">
+    <aside class="panel" aria-label="Controls">
+      <div class="panelhead"><h2><span>01</span> / ACCOUNT &amp; CONTROLS</h2><span class="pill" id="modePill">PAPER</span></div>
+      <div class="panelbody">
+        <div class="eyebrow">Authenticated session</div>
+        <div class="field"><label for="pat">Deriv personal access token</label><input id="pat" type="password" autocomplete="off" spellcheck="false" placeholder="Paste scoped token here"></div>
+        <div class="seg"><button class="btn active" id="mDemo" type="button">Demo account</button><button class="btn" id="mReal" type="button">Real account</button></div>
+        <button class="btn primary full" id="connect" type="button" style="margin-top:9px">Connect account</button>
+        <button class="btn full" id="disconnect" type="button" style="margin-top:7px">Disconnect account</button>
+        <div class="hint">Token is kept in page memory only; it is sent to Deriv's API for authentication. Only needed for “Deriv account” mode.</div>
+        <div class="reconcile" id="reconcileBox"><div class="risk-box">A contract did not report its result. Check your Deriv statement and open contracts before resuming.</div><button class="btn full" id="ackReconcile" type="button">I checked account history</button></div>
+        <div class="divider"></div>
+        <div class="eyebrow">Run mode</div>
+        <div class="field"><label for="execMode">Where do the trades go?</label><select id="execMode"><option value="research">Research · watch signals, no orders</option><option value="paper" selected>Paper · live ticks, virtual money</option><option value="sim">Simulation · random ticks, works offline</option><option value="execute">Deriv account · demo or real</option></select><p class="hint" id="modeHint"></p></div>
+        <div class="divider"></div>
+        <div class="eyebrow">Strategy engine</div>
+        <div class="field"><label for="strat">Strategy</label><select id="strat"><option value="evenodd">Even / Odd</option><option value="over">Over 8</option><option value="matches" selected>Matches</option><option value="updown">Only Ups / Only Downs</option><option value="mix">AI Mix · rarest signal wins</option></select><p class="hint" id="stratHint"></p></div>
+        <div id="mixBox" style="display:none"></div>
+        <div id="stratParams"></div>
+        <div class="field"><label for="sym">Market</label><select id="sym"></select></div>
+        <label class="small-check"><input type="checkbox" id="allMk"> Scan all markets and take the first signal</label>
+        <div class="eyebrow" style="margin-top:17px">Money management</div>
+        <div class="two-fields"><div class="field"><label for="stake">Base stake</label><input id="stake" type="number" min="0.35" step="0.01" value="1"></div><div class="field"><label for="mult">Recovery × after a loss</label><input id="mult" type="number" min="1" max="5" step="0.1" value="1.6"></div></div>
+        <div class="two-fields"><div class="field"><label for="steps">Max recovery steps</label><input id="steps" type="number" min="0" max="12" step="1" value="4"></div><div class="field"><label for="onMax">At the last step</label><select id="onMax"><option value="stop">Stop trading</option><option value="reset">Reset to base stake</option></select></div></div>
+        <div class="two-fields"><div class="field"><label for="tp">Take profit (0 = off)</label><input id="tp" type="number" min="0" step="0.5" value="5"></div><div class="field"><label for="ml">Stop loss (0 = off)</label><input id="ml" type="number" min="0" step="0.5" value="20"></div></div>
+        <div class="two-fields"><div class="field"><label for="maxStake">Max stake (0 = off)</label><input id="maxStake" type="number" min="0" step="1" value="100"></div><div class="field"><label for="maxOpen">Contracts at once</label><input id="maxOpen" type="number" min="1" max="5" step="1" value="1"></div></div>
+        <div class="field"><label for="mt">Stop after this many trades</label><input id="mt" type="number" min="1" step="1" value="200"></div>
+        <div class="risk-box" id="riskNote"></div>
+        <button class="btn primary full" id="start" type="button">Start trading</button>
+        <button class="btn danger full" id="stop" type="button" disabled style="margin-top:7px">Stop session</button>
+        <div class="two-fields"><button class="btn full" id="runReplay" type="button" style="margin-top:7px">Replay on cached ticks</button><button class="btn full" id="exportCsv" type="button" style="margin-top:7px">Export journal</button></div>
+        <button class="btn full" id="resetSession" type="button" style="margin-top:7px">Clear session</button>
+        <div class="hint">Recovery stakes grow after every loss and return to the base stake after a win. Contracts at once above 1 only trade at the base stake. A reconnect never auto-resumes a stopped run.</div>
+      </div>
+    </aside>
+    <section class="maincol">
+      <div>
+        <div class="section-title"><div><h2>Live Scan Matrix</h2><p>Tap a market card to select it for trading and the digit map.</p></div><span class="status-chip" id="marketStatus"><i class="dot"></i><span>BOOTSTRAPPING</span></span></div>
+        <div class="market-grid" id="marketsGrid"></div>
+      </div>
+      <div class="twopanels">
+        <section class="panel">
+          <div class="panelhead"><h3><span>02</span> / SCANNER CONSOLE</h3><span class="pill" id="consoleMode">WATCH MODE</span></div>
+          <div class="panelbody"><div class="terminal" id="terminal" aria-live="polite"><div class="term-line info"><span class="term-time">[BOOT]</span><span class="term-msg">Initialising market scanner…</span></div></div><div class="hint">Only actual feed, analysis and trading events are written here.</div></div>
+        </section>
+        <section class="panel">
+          <div class="panelhead"><h3><span>03</span> / SIGNAL &amp; MONEY</h3><span class="pill" id="gateBadge">NO SIGNAL</span></div>
+          <div class="panelbody">
+            <div class="gate-status" id="gateStatus"><strong id="gateTitle">Waiting for history</strong><small id="gateReason">The engine needs real tick history before it evaluates a setup.</small></div>
+            <div class="gate-grid">
+              <div class="gate-metric"><small>Contract</small><b id="gSig">—</b></div>
+              <div class="gate-metric"><small>Rarity (bits)</small><b id="gBits">—</b></div>
+              <div class="gate-metric"><small>Next stake</small><b id="gStake">—</b></div>
+              <div class="gate-metric"><small>Recovery step</small><b id="gStep">—</b></div>
+              <div class="gate-metric"><small>Run P/L / target</small><b id="gNet">—</b></div>
+              <div class="gate-metric"><small>Stop loss</small><b id="gSl">—</b></div>
+            </div>
+            <div class="gate-foot">Rarity says how unusual the pattern is in the recent ticks; it is not a probability that the next tick follows it. Last digits of Deriv's synthetic indices are random, and every contract pays slightly less than its fair odds.</div>
           </div>
-          <div class="info">Gap: - | Count: -</div>
-          <div class="dots">• • • • •</div>
-          <div class="result pending">Waiting…</div>
-        `;
-        gridEl.appendChild(card);
-      });
-    }
+        </section>
+      </div>
+      <section class="panel">
+        <div class="panelhead"><h3><span>04</span> / SELECTED MARKET DIGIT MAP</h3><span class="pill" id="digitSymbol">1HZ100V</span></div>
+        <div class="panelbody"><div class="digit-bars" id="digitBars"></div><div class="digits-note" id="digitNote">Waiting for selected-market ticks. Frequency is descriptive and does not by itself predict the next digit.</div></div>
+      </section>
+      <section class="panel">
+        <div class="panelhead"><h3><span>05</span> / TRADE JOURNAL</h3><span class="pill" id="state">IDLE</span></div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>Time</th><th>Market</th><th>Contract</th><th>Stake · step</th><th>Why</th><th>Result</th><th>P&amp;L</th></tr></thead><tbody id="tb"><tr><td colspan="8" class="neutral">No trades in this session yet.</td></tr></tbody></table></div>
+        <div class="panelbody"><div class="hint" id="journalSummary">Session summary: 0 runs · 0 wins · 0 losses · net 0.00</div><div id="splitReport" class="split-report" aria-live="polite">Replay not run yet. It shows how each rule would have done on the ticks already loaded, not how it will do next.</div></div>
+      </section>
+      <section class="panel">
+        <div class="panelhead"><h3><span>06</span> / OPEN POSITIONS</h3><span class="pill" id="openCount">0 OPEN</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Contract ID</th><th>Strategy</th><th>Market</th><th>Buy price</th><th>Live value</th><th>Action</th></tr></thead><tbody id="openTb"><tr><td colspan="6" class="neutral">No open positions.</td></tr></tbody></table></div>
+      </section>
+    </section>
+  </div>
+  <footer class="footer">EMRON AUTOPILOT · Independent tool, not affiliated with Deriv · Trading options can lose the full stake · No win-rate guarantee.</footer>
+</main>
+<div class="scan-overlay" id="scanOverlay" role="status" aria-live="polite"><canvas id="rain" aria-hidden="true"></canvas><div class="scan-box"><div class="kicker">EMRON // SCAN SEQUENCE</div><h2>SCANNING THE MARKET</h2><p class="mini-note" id="scanNote">Loading tick history, counting digits, checking every strategy rule.</p><div class="scan-track"><span></span></div><div class="scan-log" id="scanLog"></div><button class="btn full" id="scanCancel" type="button" style="margin-top:14px">Cancel scan</button></div></div>
+<dialog id="sessionReport"><div class="kicker">EMRON // SESSION REPORT</div><h2 style="margin:8px 0 14px" id="reportTitle">Session complete</h2><div id="reportBody"></div><div class="dialog-actions"><button class="btn" id="closeReport" type="button">Close report</button><button class="btn primary" id="reportExport" type="button">Export journal CSV</button></div></dialog>
 
-    function updateCard(sym) {
-      const md = marketData[sym];
-      if (!md) return;
-      const card = document.getElementById('card-' + sym);
-      if (!card) return;
-      const pred = md.predicted;
-      card.querySelector('.price').textContent = md.lastPrice + ' | ' + md.history.length + ' ticks';
-      card.querySelector('.last').textContent = md.lastDigit;
-      card.querySelector('.pred').textContent = pred;
-      const gap = pred !== '-' ? md.gaps[pred] : '-';
-      const count = pred !== '-' ? md.counts[pred] : '-';
-      card.querySelector('.info').textContent = `Gap: ${gap} | Count: ${count}`;
-      // Window dots
-      const dots = card.querySelector('.dots');
-      if (md.windowOpen && !md.windowResolved) {
-        let d = '';
-        for (let i = 0; i < 5; i++) {
-          if (i < md.windowTicks.length) d += md.windowTicks[i] + ' ';
-          else d += '• ';
+<script>
+/* EMRON AI Auto Trader - engine (no DOM, no network). Works in the browser and in Node. */
+(function (root) {
+  'use strict';
+  const AT = (root.AT = root.AT || {});
+
+  /* ---------- markets ---------- */
+  const MARKETS = [
+    { id: '1HZ10V', name: 'Volatility 10 (1s) Index', tickSec: 1, pip: 2 },
+    { id: '1HZ25V', name: 'Volatility 25 (1s) Index', tickSec: 1, pip: 2 },
+    { id: '1HZ50V', name: 'Volatility 50 (1s) Index', tickSec: 1, pip: 2 },
+    { id: '1HZ75V', name: 'Volatility 75 (1s) Index', tickSec: 1, pip: 2 },
+    { id: '1HZ100V', name: 'Volatility 100 (1s) Index', tickSec: 1, pip: 2 },
+    { id: 'R_10', name: 'Volatility 10 Index', tickSec: 2, pip: 3 },
+    { id: 'R_25', name: 'Volatility 25 Index', tickSec: 2, pip: 3 },
+    { id: 'R_50', name: 'Volatility 50 Index', tickSec: 2, pip: 4 },
+    { id: 'R_75', name: 'Volatility 75 Index', tickSec: 2, pip: 4 },
+    { id: 'R_100', name: 'Volatility 100 Index', tickSec: 2, pip: 2 },
+  ];
+  const marketById = (id) => MARKETS.find((m) => m.id === id) || { id, name: id, tickSec: 1, pip: 2 };
+
+  /* ---------- small helpers ---------- */
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const log2 = Math.log2;
+
+  function digitOf(quote, pip) {
+    const s = Number(quote).toFixed(pip);
+    return s.charCodeAt(s.length - 1) - 48;
+  }
+
+  // complementary error function (Abramowitz & Stegun 7.1.26)
+  function erfc(x) {
+    const z = Math.abs(x);
+    const t = 1 / (1 + 0.5 * z);
+    const r =
+      t *
+      Math.exp(
+        -z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277))))))))
+      );
+    return x >= 0 ? r : 2 - r;
+  }
+  // "bits of surprise": -log2 P(X >= k) for X ~ Binomial(n, p), normal approximation
+  function tailBits(k, n, p) {
+    if (n <= 0) return 0;
+    const sd = Math.sqrt(n * p * (1 - p));
+    const z = (k - 0.5 - n * p) / sd;
+    const tail = 0.5 * erfc(z / Math.SQRT2);
+    return Math.max(0, -log2(Math.min(1, Math.max(tail, 1e-12))));
+  }
+
+  /* ---------- tick buffer ---------- */
+  class TickBuffer {
+    constructor(symbol, pip, max) {
+      this.symbol = symbol;
+      this.pip = pip == null ? 2 : pip;
+      this.max = max || 1000;
+      this.quotes = [];
+      this.epochs = [];
+      this.digits = [];
+    }
+    load(prices, times) {
+      this.quotes = (prices || []).map(Number);
+      this.epochs = (times || []).map(Number);
+      this.digits = this.quotes.map((q) => digitOf(q, this.pip));
+      this._trim();
+    }
+    push(quote, epoch) {
+      quote = Number(quote);
+      epoch = Number(epoch);
+      const n = this.epochs.length;
+      if (n && epoch <= this.epochs[n - 1]) return false; // duplicate or out of order
+      this.quotes.push(quote);
+      this.epochs.push(epoch);
+      this.digits.push(digitOf(quote, this.pip));
+      this._trim();
+      return true;
+    }
+    _trim() {
+      const extra = this.quotes.length - this.max;
+      if (extra > 0) {
+        this.quotes.splice(0, extra);
+        this.epochs.splice(0, extra);
+        this.digits.splice(0, extra);
+      }
+    }
+    get length() {
+      return this.quotes.length;
+    }
+    last() {
+      return this.digits.length ? this.digits[this.digits.length - 1] : null;
+    }
+    counts(n) {
+      const c = new Array(10).fill(0);
+      const d = this.digits;
+      for (let i = Math.max(0, d.length - n); i < d.length; i++) c[d[i]]++;
+      return c;
+    }
+    parity(n) {
+      const c = this.counts(n);
+      const even = c[0] + c[2] + c[4] + c[6] + c[8];
+      const total = c.reduce((a, b) => a + b, 0);
+      return { even, odd: total - even, total };
+    }
+    parityRun() {
+      const d = this.digits;
+      if (!d.length) return { parity: null, len: 0 };
+      const p = d[d.length - 1] % 2;
+      let len = 1;
+      for (let i = d.length - 2; i >= 0 && d[i] % 2 === p; i--) len++;
+      return { parity: p === 0 ? 'even' : 'odd', len };
+    }
+    // ticks since a digit satisfying pred last printed (0 = the latest tick)
+    gapSince(pred) {
+      const d = this.digits;
+      for (let i = d.length - 1, g = 0; i >= 0; i--, g++) if (pred(d[i])) return g;
+      return d.length;
+    }
+    moveRun() {
+      const q = this.quotes;
+      let dir = 0;
+      let len = 0;
+      for (let i = q.length - 1; i > 0; i--) {
+        const m = Math.sign(q[i] - q[i - 1]);
+        if (m === 0) break;
+        if (dir === 0) {
+          dir = m;
+          len = 1;
+        } else if (m === dir) len++;
+        else break;
+      }
+      return { dir, len };
+    }
+  }
+
+  /* ---------- strategies ---------- */
+  const sig = (strategy, contract_type, barrier, duration, reason, bits, label) => ({
+    strategy,
+    contract_type,
+    barrier: barrier == null ? null : String(barrier),
+    duration,
+    duration_unit: 't',
+    reason,
+    bits: round2(bits || 0),
+    label,
+  });
+
+  const STRATEGIES = {
+    evenodd: {
+      id: 'evenodd',
+      label: 'Even / Odd',
+      blurb: 'Trades the parity of the next last digit. Fades a run of one parity, follows the majority, or trades every tick.',
+      params: [
+        { key: 'mode', label: 'Entry rule', type: 'select', def: 'streak-fade', options: [['streak-fade', 'Fade a parity streak'], ['majority', 'Follow the majority'], ['every', 'Every tick']] },
+        { key: 'streak', label: 'Streak length', type: 'number', def: 3, min: 2, max: 12, show: { mode: ['streak-fade'] } },
+        { key: 'lookback', label: 'Lookback (ticks)', type: 'number', def: 50, min: 20, max: 500, show: { mode: ['majority'] } },
+        { key: 'threshold', label: 'Majority needed (%)', type: 'number', def: 58, min: 51, max: 90, show: { mode: ['majority'] } },
+        { key: 'side', label: 'Side', type: 'select', def: 'EVEN', options: [['EVEN', 'Even'], ['ODD', 'Odd']], show: { mode: ['every'] } },
+      ],
+      evaluate(buf, c) {
+        if (buf.length < 30) return null;
+        if (c.mode === 'streak-fade') {
+          const r = buf.parityRun();
+          if (r.len < c.streak) return null;
+          const to = r.parity === 'even' ? 'ODD' : 'EVEN';
+          return sig('evenodd', 'DIGIT' + to, null, 1, `${r.len} ${r.parity} digits in a row, fade with ${to}`, r.len - 1, to === 'EVEN' ? 'Even' : 'Odd');
         }
-        dots.textContent = d.trim();
-      } else {
-        dots.textContent = '• • • • •';
-      }
-      // Result
-      const res = card.querySelector('.result');
-      if (md.windowResolved) {
-        if (md.win) {
-          res.textContent = '✅ WIN';
-          res.className = 'result win';
-          card.classList.add('win');
-          card.classList.remove('loss');
-        } else {
-          res.textContent = '❌ LOSS';
-          res.className = 'result loss';
-          card.classList.add('loss');
-          card.classList.remove('win');
+        if (c.mode === 'majority') {
+          const p = buf.parity(c.lookback);
+          const top = p.even >= p.odd ? 'EVEN' : 'ODD';
+          const k = Math.max(p.even, p.odd);
+          const share = (k / p.total) * 100;
+          if (share < c.threshold) return null;
+          return sig('evenodd', 'DIGIT' + top, null, 1, `${top.toLowerCase()} is ${share.toFixed(0)}% of the last ${p.total} digits`, tailBits(k, p.total, 0.5), top === 'EVEN' ? 'Even' : 'Odd');
         }
-      } else {
-        res.textContent = md.windowOpen ? '⏳ Window Open…' : '⏳ Waiting…';
-        res.className = 'result pending';
-        card.classList.remove('win', 'loss');
-      }
-    }
+        const side = c.side === 'ODD' ? 'ODD' : 'EVEN';
+        return sig('evenodd', 'DIGIT' + side, null, 1, 'every-tick entry', 0, side === 'EVEN' ? 'Even' : 'Odd');
+      },
+    },
 
-    function updateAllCards() {
-      SYMBOLS.forEach(s => updateCard(s.id));
-    }
+    over: {
+      id: 'over',
+      label: 'Over 8',
+      blurb: 'Over N wins when the next digit is above the barrier. With barrier 8 only a 9 wins (10%), so the payout is large.',
+      params: [
+        { key: 'barrier', label: 'Barrier (Over N)', type: 'number', def: 8, min: 0, max: 8 },
+        { key: 'mode', label: 'Entry rule', type: 'select', def: 'cold-gap', options: [['cold-gap', 'After a cold gap'], ['every', 'Every tick']] },
+        { key: 'gap', label: 'Gap (ticks without a winner)', type: 'number', def: 10, min: 1, max: 200, show: { mode: ['cold-gap'] } },
+      ],
+      evaluate(buf, c) {
+        if (buf.length < 30) return null;
+        const b = c.barrier;
+        const p = (9 - b) / 10;
+        const label = `Over ${b}`;
+        if (c.mode === 'every') return sig('over', 'DIGITOVER', b, 1, 'every-tick entry', 0, label);
+        const gap = buf.gapSince((d) => d > b);
+        if (gap < c.gap) return null;
+        return sig('over', 'DIGITOVER', b, 1, `no digit above ${b} for ${gap} ticks`, gap * -log2(1 - p), label);
+      },
+    },
 
-    // ─── LOGGING ──────────────────────────────────────────────────
-    function addLog(entry, type = 'info') {
-      const div = document.createElement('div');
-      div.className = 'entry ' + type;
-      div.textContent = entry;
-      logEl.prepend(div);
-      while (logEl.children.length > 200) logEl.removeChild(logEl.lastChild);
-    }
-
-    // ─── PROCESS TICK ─────────────────────────────────────────────
-    function processTick(sym, quote, digit) {
-      if (paused) return;
-      const md = marketData[sym];
-      if (!md) return;
-      md.history.push(digit);
-      if (md.history.length > MAX_HISTORY) md.history.shift();
-      md.lastPrice = quote;
-      md.lastDigit = digit;
-
-      // Update prediction
-      const newPred = computePrediction(sym);
-      if (newPred !== null) md.predicted = newPred;
-
-      // If window is open for this market, collect tick
-      if (md.windowOpen && !md.windowResolved) {
-        md.windowTicks.push(digit);
-        // Check if we have 5 ticks
-        if (md.windowTicks.length >= 5) {
-          md.windowResolved = true;
-          // Check if predicted digit appears
-          const pred = md.predicted;
-          if (pred !== '-' && md.windowTicks.includes(pred)) {
-            md.win = true;
-          } else {
-            md.win = false;
-          }
-          updateCard(sym);
-          // Check if all markets resolved
-          checkAllResolved();
-        } else {
-          updateCard(sym);
-        }
-      } else {
-        // Just update card (prediction may change)
-        updateCard(sym);
-      }
-
-      // Update global tick counter
-      globalTickCount++;
-      tickCounterEl.textContent = `📡 ${globalTickCount} ticks`;
-
-      // Check if we have enough data to start signal if not yet running
-      if (signalRunning && signalPhase === 'idle') {
-        checkAllMarketsReady();
-      }
-    }
-
-    // ─── SIGNAL TIMER ─────────────────────────────────────────────
-    function checkAllMarketsReady() {
-      let ready = true;
-      SYMBOLS.forEach(s => {
-        const md = marketData[s.id];
-        if (!md || md.history.length < COLLECT_THRESHOLD) ready = false;
-      });
-      if (ready && signalRunning && signalPhase === 'idle') {
-        allMarketsReady = true;
-        startCountdown();
-      }
-    }
-
-    function startCountdown() {
-      if (!signalRunning) return;
-      signalPhase = 'ready';
-      signalCountdown = 15;
-      // Update predictions for all markets
-      SYMBOLS.forEach(s => {
-        const md = marketData[s.id];
-        const pred = computePrediction(s.id);
-        if (pred !== null) md.predicted = pred;
-        md.windowOpen = false;
-        md.windowResolved = false;
-        md.windowTicks = [];
-        md.win = false;
-        updateCard(s.id);
-      });
-      updateSummary('READY – All markets ready');
-      addLog('🔔 Signal started – 15s countdown for all markets', 'info');
-
-      if (signalTimerInterval) clearInterval(signalTimerInterval);
-      signalTimerInterval = setInterval(() => {
-        if (!signalRunning) { clearInterval(signalTimerInterval); return; }
-        signalCountdown--;
-        updateTimerUI();
-        if (signalCountdown <= 0) {
-          clearInterval(signalTimerInterval);
-          signalTimerInterval = null;
-          openTradeWindows();
-        }
-      }, 1000);
-      updateTimerUI();
-    }
-
-    function updateTimerUI() {
-      const sec = signalCountdown;
-      const mm = String(Math.floor(sec / 60)).padStart(2, '0');
-      const ss = String(sec % 60).padStart(2, '0');
-      timerDisplay.textContent = mm + ':' + ss;
-      const progress = ((15 - sec) / 15) * 100;
-      progressFill.style.width = progress + '%';
-
-      if (sec > 5) {
-        // READY
-        signalPhase = 'ready';
-        phaseTitle.textContent = '◉ SIGNAL FOUND – READY';
-        phaseTitle.style.color = '#ffcc33';
-        timerDisplay.style.color = '#7ec8e3';
-        timerDisplay.classList.remove('blink');
-        statusText.textContent = 'READY';
-        statusText.style.color = '#ffcc33';
-        progressFill.style.background = '#7ec8e3';
-        windowActive = false;
-        updateSummary(`Ready in ${sec}s`);
-        // low beep optional
-      } else if (sec > 0) {
-        // GO TIME
-        if (signalPhase !== 'go') {
-          signalPhase = 'go';
-          phaseTitle.textContent = '◉ GO TIME!';
-          phaseTitle.style.color = '#ff3b3b';
-          timerDisplay.style.color = '#ff3b3b';
-          timerDisplay.classList.add('blink');
-          statusText.textContent = 'GO TIME! ⚡';
-          statusText.style.color = '#ff3b3b';
-          progressFill.style.background = '#ff3b3b';
-          addLog('⚡ GO TIME!', 'info');
-          updateSummary('GO TIME! Get ready');
-        }
-        playBeep(880, 0.12);
-        updateSummary(`GO in ${sec}s`);
-      } else {
-        // reached 0 -> handled separately
-      }
-    }
-
-    function openTradeWindows() {
-      if (!signalRunning) return;
-      signalPhase = 'window';
-      windowActive = true;
-      timerDisplay.textContent = '00:00';
-      timerDisplay.style.color = '#60a5fa';
-      timerDisplay.classList.remove('blink');
-      phaseTitle.textContent = '● TRADE WINDOWS OPEN';
-      phaseTitle.style.color = '#60a5fa';
-      statusText.textContent = 'WINDOWS OPEN';
-      statusText.style.color = '#60a5fa';
-      progressFill.style.background = '#60a5fa';
-      progressFill.style.width = '100%';
-      updateSummary('Trade windows open – collecting 5 ticks per market');
-      playDoubleBeep();
-      addLog('🚪 Trade windows opened for all markets', 'info');
-
-      // Open window for each market
-      SYMBOLS.forEach(s => {
-        const md = marketData[s.id];
-        md.windowOpen = true;
-        md.windowResolved = false;
-        md.windowTicks = [];
-        md.win = false;
-        updateCard(s.id);
-      });
-
-      // Set a safety timeout to resolve if some markets don't get 5 ticks (shouldn't happen)
-      setTimeout(() => {
-        if (signalRunning) checkAllResolved();
-      }, 10000);
-    }
-
-    function checkAllResolved() {
-      let allResolved = true;
-      SYMBOLS.forEach(s => {
-        const md = marketData[s.id];
-        if (md.windowOpen && !md.windowResolved) allResolved = false;
-      });
-      if (allResolved && windowActive) {
-        windowActive = false;
-        showResults();
-      } else {
-        // force resolve any still open after 10s (safety)
-        setTimeout(() => {
-          if (signalRunning) {
-            SYMBOLS.forEach(s => {
-              const md = marketData[s.id];
-              if (md.windowOpen && !md.windowResolved) {
-                md.windowResolved = true;
-                md.win = false; // assume loss
-                updateCard(s.id);
-              }
-            });
-            checkAllResolved();
-          }
-        }, 2000);
-      }
-    }
-
-    function showResults() {
-      if (!signalRunning) return;
-      signalPhase = 'result';
-      // Build summary
-      let lines = [];
-      SYMBOLS.forEach(s => {
-        const md = marketData[s.id];
-        const pred = md.predicted;
-        const last = md.lastDigit;
-        const ticks = md.windowTicks.join(',');
-        const win = md.win;
-        lines.push(`${s.name}: Predict ${pred} | Last ${last} | Ticks ${ticks} | ${win ? '✅ WIN' : '❌ LOSS'}`);
-      });
-      const summaryText = lines.join('  ');
-      updateSummary('RESULTS: ' + summaryText);
-      addLog('📊 Results:\n' + lines.join('\n'), 'info');
-
-      // Show result for 4s then restart
-      phaseTitle.textContent = '📊 RESULTS';
-      phaseTitle.style.color = '#93c5fd';
-      timerDisplay.textContent = '--';
-      statusText.textContent = 'Restarting…';
-      progressFill.style.background = '#93c5fd';
-
-      setTimeout(() => {
-        if (signalRunning) {
-          // Reset windows and start again
-          SYMBOLS.forEach(s => {
-            const md = marketData[s.id];
-            md.windowOpen = false;
-            md.windowResolved = false;
-            md.windowTicks = [];
-            md.win = false;
-            updateCard(s.id);
+    matches: {
+      id: 'matches',
+      label: 'Matches',
+      blurb: 'Picks a digit and wins if the next last digit equals it (10%). The hot digit must lead across several windows.',
+      params: [
+        { key: 'digit', label: 'Digit', type: 'select', def: 'hot', options: [['hot', 'Hottest (consensus)'], ['cold', 'Coldest (consensus)'], ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => [String(d), 'Fixed ' + d])] },
+        { key: 'windows', label: 'Windows (ticks)', type: 'text', def: '100,150,200', show: { digit: ['hot', 'cold'] } },
+        { key: 'minShare', label: 'Min share of hot digit (%)', type: 'number', def: 11, min: 10, max: 30, show: { digit: ['hot'] } },
+        { key: 'trigger', label: 'Entry rule', type: 'select', def: 'on-hit', options: [['on-hit', 'When that digit just printed'], ['every', 'Every tick']] },
+      ],
+      evaluate(buf, c) {
+        const wins = String(c.windows || '100,150,200')
+          .split(',')
+          .map((x) => parseInt(x, 10))
+          .filter((n) => n >= 20 && n <= buf.length);
+        let digit = null;
+        let bits = 0;
+        let why = '';
+        if (c.digit === 'hot' || c.digit === 'cold') {
+          if (!wins.length) return null;
+          const picks = wins.map((n) => {
+            const cnt = buf.counts(n);
+            const v = c.digit === 'hot' ? Math.max(...cnt) : Math.min(...cnt);
+            const idx = [];
+            cnt.forEach((x, i) => x === v && idx.push(i));
+            return { n, v, idx };
           });
-          startCountdown();
+          if (picks.some((p) => p.idx.length !== 1)) return null;
+          digit = picks[0].idx[0];
+          if (picks.some((p) => p.idx[0] !== digit)) return null;
+          const small = picks[0];
+          if (c.digit === 'hot') {
+            if ((small.v / small.n) * 100 < c.minShare) return null;
+            bits = tailBits(small.v, small.n, 0.1);
+            why = `${digit} leads ${wins.join('/')} ticks (${((small.v / small.n) * 100).toFixed(1)}% of ${small.n})`;
+          } else {
+            bits = 1;
+            why = `${digit} is the coldest across ${wins.join('/')} ticks`;
+          }
+        } else {
+          digit = parseInt(c.digit, 10);
+          why = `fixed digit ${digit}`;
         }
-      }, 4000);
-    }
+        if (c.trigger === 'on-hit' && buf.last() !== digit) return null;
+        return sig('matches', 'DIGITMATCH', digit, 1, why + (c.trigger === 'on-hit' ? ', just printed' : ''), bits, `Matches ${digit}`);
+      },
+    },
 
-    function updateSummary(text) {
-      summaryEl.textContent = text;
-    }
-
-    // ─── SIGNAL CONTROL ────────────────────────────────────────────
-    function startSignal() {
-      if (signalRunning) return;
-      // Reset all market window states
-      SYMBOLS.forEach(s => {
-        const md = marketData[s.id];
-        md.windowOpen = false;
-        md.windowResolved = false;
-        md.windowTicks = [];
-        md.win = false;
-        md.predicted = computePrediction(s.id) || '-';
-        updateCard(s.id);
-      });
-      signalRunning = true;
-      signalPhase = 'idle';
-      allMarketsReady = false;
-      windowActive = false;
-      if (signalTimerInterval) clearInterval(signalTimerInterval);
-      phaseTitle.textContent = '⏳ COLLECTING TICKS';
-      phaseTitle.style.color = '#ffcc33';
-      timerDisplay.textContent = '--';
-      statusText.textContent = 'Collecting data…';
-      progressFill.style.width = '0%';
-      updateSummary('Collecting ticks for all markets…');
-      addLog('▶️ Signal started – collecting ticks', 'info');
-      checkAllMarketsReady();
-      // Also start a periodic check
-      if (signalTimerInterval) clearInterval(signalTimerInterval);
-      signalTimerInterval = setInterval(() => {
-        if (!signalRunning) { clearInterval(signalTimerInterval); return; }
-        if (signalPhase === 'idle') {
-          checkAllMarketsReady();
-          // update progress
-          let total = 0;
-          SYMBOLS.forEach(s => { total += marketData[s.id].history.length; });
-          const avg = Math.round(total / SYMBOLS.length);
-          const pct = Math.min(100, (avg / COLLECT_THRESHOLD) * 100);
-          progressFill.style.width = pct + '%';
-          updateSummary(`Collecting… ${avg}/${COLLECT_THRESHOLD} avg ticks`);
+    updown: {
+      id: 'updown',
+      label: 'Only Ups / Only Downs',
+      blurb: 'Wins only if every tick in the duration moves the same way. Momentum follows a run, fade bets against it.',
+      params: [
+        { key: 'mode', label: 'Entry rule', type: 'select', def: 'momentum', options: [['momentum', 'Follow a run'], ['fade', 'Fade a run'], ['every', 'Every tick']] },
+        { key: 'run', label: 'Run length (ticks)', type: 'number', def: 2, min: 1, max: 8, show: { mode: ['momentum', 'fade'] } },
+        { key: 'side', label: 'Side', type: 'select', def: 'auto', options: [['auto', 'Either'], ['up', 'Only Ups'], ['down', 'Only Downs']] },
+        { key: 'duration', label: 'Duration (ticks)', type: 'number', def: 3, min: 2, max: 5 },
+      ],
+      evaluate(buf, c) {
+        if (buf.length < 30) return null;
+        const d = Math.min(5, Math.max(2, c.duration | 0));
+        let up;
+        let bits = 0;
+        let why;
+        if (c.mode === 'every') {
+          up = c.side !== 'down';
+          why = 'every-tick entry';
+        } else {
+          const r = buf.moveRun();
+          if (r.len < c.run) return null;
+          up = r.dir > 0;
+          if (c.mode === 'fade') up = !up;
+          bits = r.len - 1;
+          why = `${r.len} ${r.dir > 0 ? 'rising' : 'falling'} ticks, ${c.mode === 'fade' ? 'fade' : 'follow'}`;
+          if (c.side === 'up' && !up) return null;
+          if (c.side === 'down' && up) return null;
         }
-      }, 500);
+        return sig('updown', up ? 'RUNHIGH' : 'RUNLOW', null, d, why, bits, up ? 'Only Ups' : 'Only Downs');
+      },
+    },
+  };
+
+  const STRATEGY_ORDER = ['evenodd', 'over', 'matches', 'updown'];
+
+  function defaultStrategyParams() {
+    const out = {};
+    for (const id of STRATEGY_ORDER) {
+      out[id] = {};
+      for (const p of STRATEGIES[id].params) out[id][p.key] = p.def;
+    }
+    return out;
+  }
+
+  function defaultConfig() {
+    return {
+      strategy: 'matches', // evenodd | over | matches | updown | mix
+      strat: defaultStrategyParams(),
+      mixIncludes: STRATEGY_ORDER.slice(),
+      markets: ['1HZ100V'],
+      money: { stake: 1, multiplier: 1.6, maxSteps: 4, onMaxSteps: 'stop', takeProfit: 5, stopLoss: 20, maxStake: 100 },
+      maxOpen: 1,
+      scanMs: 3500,
+    };
+  }
+
+  // best signal for one buffer under the chosen strategy ("mix" ranks by rarity in bits)
+  function evaluate(buf, cfg) {
+    const ids = cfg.strategy === 'mix' ? cfg.mixIncludes : [cfg.strategy];
+    let best = null;
+    for (const id of ids) {
+      const s = STRATEGIES[id];
+      if (!s) continue;
+      const params = Object.assign({}, defaultStrategyParams()[id], (cfg.strat || {})[id]);
+      const r = s.evaluate(buf, params);
+      if (r && (!best || r.bits > best.bits)) best = r;
+    }
+    return best;
+  }
+
+  /* ---------- money management ---------- */
+  class MoneyManager {
+    constructor(cfg) {
+      this.cfg = cfg;
+      this.reset();
+    }
+    reset() {
+      this.step = 0;
+      this.net = 0;
+    }
+    stake() {
+      const c = this.cfg;
+      let s = round2(c.stake * Math.pow(c.multiplier, this.step));
+      if (c.maxStake > 0 && s > c.maxStake) s = round2(c.maxStake);
+      return s;
+    }
+    // returns a halt reason or null
+    record(profit) {
+      const c = this.cfg;
+      this.net = round2(this.net + profit);
+      let halt = null;
+      if (profit > 0) this.step = 0;
+      else if (profit < 0) {
+        this.step++;
+        if (this.step > c.maxSteps) {
+          if (c.onMaxSteps === 'reset') this.step = 0;
+          else halt = 'max-steps';
+        }
+      }
+      if (c.takeProfit > 0 && this.net >= c.takeProfit) halt = 'take-profit';
+      else if (!halt && c.stopLoss > 0 && this.net <= -c.stopLoss) halt = 'stop-loss';
+      return halt;
+    }
+  }
+
+  /* ---------- session (trade list + derived stats) ---------- */
+  class Session {
+    constructor() {
+      this.trades = [];
+    }
+    reset() {
+      this.trades = [];
+    }
+    upsert(t) {
+      const i = this.trades.findIndex((x) => x.uid === t.uid);
+      if (i >= 0) this.trades[i] = t;
+      else this.trades.unshift(t);
+      if (this.trades.length > 500) this.trades.length = 500;
+    }
+    stats() {
+      let stake = 0;
+      let payout = 0;
+      let won = 0;
+      let lost = 0;
+      for (const t of this.trades) {
+        if (!t.settled) continue;
+        stake += t.stake;
+        if (t.profit > 0) {
+          won++;
+          payout += t.sellPrice != null ? t.sellPrice : t.stake + t.profit;
+        } else lost++;
+      }
+      return { stake: round2(stake), payout: round2(payout), runs: won + lost, won, lost, pl: round2(payout - stake) };
+    }
+  }
+
+  /* ---------- trader (state machine) ---------- */
+  // client interface: connect, history(sym,n), subscribeTicks(sym,cb)->unsub, buy(params,onUpdate)->ack, sell(id), balance
+  class Trader {
+    constructor(client, cfg, session, emit) {
+      this.client = client;
+      this.cfg = cfg;
+      this.session = session;
+      this.emit = emit || function () {};
+      this.mm = new MoneyManager(cfg.money);
+      this.state = 'idle'; // idle | scanning | running | stopping
+      this.bufs = {};
+      this.unsubs = [];
+      this.inflight = new Set();
+      this.halted = null;
+      this.uid = 0;
+    }
+    log(level, text) {
+      this.emit('log', { level, text, t: Date.now() });
+    }
+    setState(s) {
+      this.state = s;
+      this.emit('state', s);
+    }
+    buffer(id) {
+      return this.bufs[id];
     }
 
-    function stopSignal() {
-      signalRunning = false;
-      if (signalTimerInterval) clearInterval(signalTimerInterval);
-      signalTimerInterval = null;
-      signalPhase = 'idle';
-      phaseTitle.textContent = '⏹ SIGNAL STOPPED';
-      phaseTitle.style.color = '#fca5a5';
-      timerDisplay.textContent = '--';
-      statusText.textContent = 'Stopped';
-      progressFill.style.width = '0%';
-      updateSummary('');
-      addLog('⏹ Signal stopped', 'info');
-      SYMBOLS.forEach(s => {
-        const md = marketData[s.id];
-        md.windowOpen = false;
-        md.windowResolved = false;
-        md.windowTicks = [];
-        md.win = false;
-        updateCard(s.id);
-      });
+    async start() {
+      if (this.state !== 'idle') return;
+      this.halted = null;
+      this.mm = new MoneyManager(this.cfg.money);
+      this.setState('scanning');
+      const t0 = Date.now();
+      try {
+        this.log('info', `scan started: ${this.cfg.markets.length} market(s), strategy ${this.cfg.strategy}`);
+        for (const id of this.cfg.markets) {
+          const m = marketById(id);
+          this.log('info', `${id}: loading tick history`);
+          let h = { prices: [], times: [], pip: m.pip };
+          try {
+            h = await this.client.history(id, 1000);
+          } catch (e) {
+            this.log('warn', `${id}: history unavailable (${e.message}); warming up from live ticks`);
+          }
+          const buf = new TickBuffer(id, h.pip != null ? h.pip : m.pip);
+          buf.load(h.prices, h.times);
+          this.bufs[id] = buf;
+          this.logAnalysis(id, buf);
+        }
+        for (const id of this.cfg.markets) {
+          this.unsubs.push(await this.client.subscribeTicks(id, (tick) => this.onTick(id, tick)));
+        }
+        const wait = this.cfg.scanMs - (Date.now() - t0);
+        if (wait > 0) await sleep(wait);
+        if (this.state !== 'scanning') return; // stopped during the scan
+        this.log('ok', 'scan complete, trading started');
+        this.setState('running');
+      } catch (e) {
+        this.log('error', e.message || String(e));
+        this.emit('error', e);
+        this.teardown();
+        this.setState('idle');
+      }
     }
 
-    // ─── WEBSOCKET ──────────────────────────────────────────────────
-    function connect() {
-      const appId = appIdInput.value.trim();
-      if (!appId) {
-        settingsError.textContent = '⚠️ Please enter your App ID.';
-        settingsError.style.display = 'block';
+    logAnalysis(id, buf) {
+      const n = buf.length;
+      this.log('ok', `${id}: ${n} ticks, pip ${buf.pip}`);
+      if (!n) return;
+      for (const w of [20, 50, 100, 150, 200, 500, 1000]) {
+        if (w > n) continue;
+        const c = buf.counts(w);
+        const p = buf.parity(w);
+        const hot = c.indexOf(Math.max(...c));
+        const cold = c.indexOf(Math.min(...c));
+        this.log('info', `${id} last ${w}: digits ${c.join(' ')} | even/odd ${p.even}/${p.odd} | hot ${hot} cold ${cold}`);
+      }
+      const gaps = [];
+      for (let d = 0; d < 10; d++) gaps.push(buf.gapSince((x) => x === d));
+      this.log('info', `${id}: ticks since each digit ${gaps.join(' ')}`);
+      const q = buf.quotes;
+      let ups = 0;
+      let downs = 0;
+      let sum = 0;
+      let sq = 0;
+      for (let i = 1; i < q.length; i++) {
+        if (q[i] > q[i - 1]) ups++;
+        else if (q[i] < q[i - 1]) downs++;
+        const r = (q[i] - q[i - 1]) / q[i - 1];
+        sum += r;
+        sq += r * r;
+      }
+      const m = Math.max(1, q.length - 1);
+      const sd = Math.sqrt(Math.max(0, sq / m - (sum / m) * (sum / m)));
+      const r = buf.moveRun();
+      const pr = buf.parityRun();
+      this.log('info', `${id}: rising ${ups} falling ${downs}, tick change sd ${(sd * 100).toFixed(4)}%`);
+      this.log('info', `${id}: price run ${r.len} ${r.dir > 0 ? 'up' : r.dir < 0 ? 'down' : 'flat'}, parity run ${pr.len} ${pr.parity}`);
+      const ids = this.cfg.strategy === 'mix' ? this.cfg.mixIncludes : [this.cfg.strategy];
+      for (const sid of ids) {
+        const one = Object.assign({}, this.cfg, { strategy: sid });
+        const s = evaluate(buf, one);
+        this.log(s ? 'signal' : 'info', s ? `${id} ${STRATEGIES[sid].label}: ${s.label} - ${s.reason} (${s.bits} bits)` : `${id} ${STRATEGIES[sid].label}: no signal right now`);
+      }
+    }
+
+    onTick(id, tick) {
+      const buf = this.bufs[id];
+      if (!buf) return;
+      if (tick.pip != null && tick.pip !== buf.pip) buf.pip = tick.pip;
+      if (!buf.push(tick.quote, tick.epoch)) return;
+      this.emit('tick', { id, digit: buf.last(), quote: Number(tick.quote) });
+      if (this.state === 'scanning') this.log('info', `${id} live tick ${Number(tick.quote).toFixed(buf.pip)} digit ${buf.last()}`);
+      if (this.state !== 'running' || this.halted) return;
+      if (this.cfg.observe) {
+        // research mode: say what would be traded, never place an order
+        const o = evaluate(buf, this.cfg);
+        if (o) {
+          const key = id + o.contract_type + o.barrier;
+          const now = Date.now();
+          if (key !== this._obsKey || now - this._obsAt > 8000) {
+            this._obsKey = key;
+            this._obsAt = now;
+            this.log('signal', `${id}: would trade ${o.label} (${o.reason}) - observing only, no order sent`);
+            this.emit('signal', { id, signal: o });
+          }
+        }
         return;
       }
-      settingsError.style.display = 'none';
-
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) ws.close();
-
-      const wsUrl = `wss://api.derivws.com/trading/v1/options/ws/public?app_id=${appId}`;
-      console.log(`🔗 Connecting to ${wsUrl}`);
-      addLog(`🔗 Connecting to public WebSocket (app_id: ${appId})`, 'info');
-      statusEl.className = 'connecting';
-      statusEl.textContent = '● Connecting…';
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        console.log('✅ WebSocket opened');
-        addLog('✅ WebSocket opened', 'info');
-        statusEl.className = 'live';
-        statusEl.textContent = '● Live';
-        reconnectAttempts = 0;
-        // Subscribe to ALL symbols
-        SYMBOLS.forEach(s => {
-          const req = { ticks: s.id, subscribe: 1 };
-          console.log(`📤 Sending subscribe: ${JSON.stringify(req)}`);
-          ws.send(JSON.stringify(req));
-        });
-        addLog(`📡 Subscribed to ${SYMBOLS.length} symbols`, 'info');
-      };
-
-      ws.onmessage = (msg) => {
-        try {
-          const data = JSON.parse(msg.data);
-          console.log('📨 Message received:', data);
-          if (data.error) {
-            console.error('❌ Server error:', data.error);
-            addLog(`❌ Server error: ${data.error.message} (code: ${data.error.code})`, 'error');
-            settingsError.textContent = `Server error: ${data.error.message}`;
-            settingsError.style.display = 'block';
-            return;
-          }
-          if (!data.tick) return;
-          const sym = data.tick.symbol;
-          if (!marketData[sym]) {
-            console.warn(`⚠️ Unknown symbol: ${sym}`);
-            return;
-          }
-          const quote = data.tick.quote;
-          if (quote === undefined || quote === null) return;
-          const digit = parseInt(quote.toString().slice(-1));
-          if (isNaN(digit)) return;
-
-          processTick(sym, quote.toString(), digit);
-        } catch (e) {
-          console.warn('⚠️ Error parsing message:', e);
-        }
-      };
-
-      ws.onclose = (event) => {
-        console.warn(`⚠️ WebSocket closed: code=${event.code}, reason=${event.reason || 'none'}`);
-        addLog(`⚠️ WebSocket closed (code: ${event.code})`, 'error');
-        statusEl.className = 'error';
-        statusEl.textContent = '● Disconnected';
-        if (reconnectAttempts < MAX_RECONNECT) {
-          reconnectAttempts++;
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-          console.log(`⏳ Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts})`);
-          addLog(`⏳ Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts})`, 'info');
-          setTimeout(connect, delay);
-        } else {
-          statusEl.textContent = '⚠️ Failed – refresh page';
-          console.error('❌ Max reconnection attempts reached.');
-          addLog('❌ Max reconnection attempts reached. Please refresh.', 'error');
-        }
-      };
-
-      ws.onerror = (err) => {
-        console.error('❌ WebSocket error:', err);
-        addLog(`❌ WebSocket error: ${err.message || 'unknown'}`, 'error');
-      };
+      const cap = this.mm.step > 0 ? 1 : this.cfg.maxOpen;
+      if (this.inflight.size >= cap) return;
+      const s = evaluate(buf, this.cfg);
+      if (s) this.place(s, id);
     }
 
-    // ─── EVENTS ──────────────────────────────────────────────────
-    saveSettingsBtn.addEventListener('click', () => {
-      const appId = appIdInput.value.trim();
-      const token = apiTokenInput.value.trim();
-      if (!appId) { settingsError.textContent = '⚠️ App ID is required.'; settingsError.style.display = 'block'; return; }
-      settingsError.style.display = 'none';
-      localStorage.setItem('deriv_creds', JSON.stringify({ appId, token }));
-      if (ws) { ws.close(); }
-      connect();
-    });
+    place(s, id, opts) {
+      const stake = opts && opts.stake != null ? opts.stake : this.mm.stake();
+      const bal = this.client.balance;
+      if (bal != null && stake > bal) {
+        this.log('error', `stake ${stake.toFixed(2)} is above the balance ${bal.toFixed(2)}`);
+        this.finish('insufficient-balance');
+        return;
+      }
+      const trade = {
+        uid: ++this.uid + '-' + Date.now(),
+        market: id,
+        label: s.label,
+        contract_type: s.contract_type,
+        barrier: s.barrier,
+        duration: s.duration,
+        reason: s.reason,
+        bits: s.bits,
+        stake,
+        step: this.mm.step,
+        status: 'pending',
+        settled: false,
+        t: Date.now(),
+        manual: !!(opts && opts.manual),
+      };
+      this.inflight.add(trade);
+      this.session.upsert(trade);
+      this.emit('trade', trade);
+      const t0 = Date.now();
+      this.client
+        .buy({ symbol: id, contract_type: s.contract_type, barrier: s.barrier, duration: s.duration, duration_unit: 't', stake }, (c) => this.onContract(trade, c))
+        .then((ack) => {
+          this.fails = 0;
+          trade.id = ack.contract_id;
+          trade.payout = ack.payout;
+          trade.latency = Date.now() - t0;
+          if (!trade.settled) trade.status = 'open';
+          this.watch(trade);
+          this.emit('trade', trade);
+        })
+        .catch((e) => {
+          this.inflight.delete(trade);
+          trade.status = 'error';
+          trade.settled = false;
+          trade.error = e.message || String(e);
+          this.session.trades = this.session.trades.filter((x) => x.uid !== trade.uid);
+          this.log('error', `buy failed: ${trade.error}`);
+          this.emit('trade-removed', trade);
+          if (!(opts && opts.manual)) {
+            this.fails = (this.fails || 0) + 1;
+            if (e.fatal) this.finish('error');
+            else if (this.fails >= 3) {
+              this.log('error', `${this.fails} buy attempts in a row failed, stopping so you can check the account`);
+              this.finish('error');
+            }
+          }
+          this.maybeComplete();
+        });
+    }
 
-    clearSettingsBtn.addEventListener('click', () => {
-      localStorage.removeItem('deriv_creds');
-      appIdInput.value = '';
-      apiTokenInput.value = '';
-      if (ws) { ws.close(); }
-    });
+    // a contract that does not settle in time is re-requested once, then given up on
+    watch(trade) {
+      const base = (trade.duration * marketById(trade.market).tickSec + 20) * 1000;
+      trade.watch = setTimeout(() => {
+        if (trade.settled) return;
+        this.log('warn', `contract ${trade.id} still open after ${Math.round(base / 1000)}s, asking for its status`);
+        if (this.client.refresh) this.client.refresh(trade.id);
+        trade.watch = setTimeout(() => {
+          if (trade.settled) return;
+          trade.status = 'unknown';
+          this.inflight.delete(trade);
+          this.log('error', `contract ${trade.id} did not report a result; stopping so you can check your account`);
+          this.emit('trade', trade);
+          this.finish('error');
+        }, base);
+      }, base);
+    }
 
-    startSignalBtn.addEventListener('click', () => {
-      if (!soundEnabled) {
-        // Ask to enable sound
-        if (confirm('Enable sound alerts?')) {
-          soundEnabled = true;
-          initAudio();
-          document.querySelector('#startSignalBtn').style.background = '#065f46';
+    onContract(trade, c) {
+      if (trade.settled) return;
+      if (c.id != null && trade.id == null) trade.id = c.id;
+      if (c.bid != null) trade.value = c.bid;
+      if (c.profit != null) trade.liveProfit = c.profit;
+      trade.sellable = !!c.isValidToSell;
+      if (!c.closed) {
+        trade.status = 'open';
+        this.emit('trade', trade);
+        return;
+      }
+      let profit = c.profit;
+      if (profit == null && c.sellPrice != null) profit = round2(c.sellPrice - trade.stake);
+      if (profit == null) profit = c.status === 'won' ? round2((trade.payout || 0) - trade.stake) : -trade.stake;
+      trade.settled = true;
+      clearTimeout(trade.watch);
+      trade.profit = round2(profit);
+      trade.sellPrice = c.sellPrice != null ? c.sellPrice : trade.profit > 0 ? round2(trade.stake + trade.profit) : 0;
+      trade.status = trade.profit > 0 ? 'won' : 'lost';
+      this.inflight.delete(trade);
+      this.session.upsert(trade);
+      let halt = null;
+      if (!trade.manual) halt = this.mm.record(trade.profit);
+      this.emit('trade', trade);
+      this.emit('stats', this.session.stats());
+      if (halt) this.finish(halt);
+      else this.maybeComplete();
+    }
+
+    async sell(trade) {
+      if (!trade || trade.settled || trade.id == null) return;
+      return this.client.sell(trade.id);
+    }
+
+    stop() {
+      if (this.state === 'idle') return;
+      this.finish('manual');
+    }
+
+    finish(reason) {
+      if (this.halted) return;
+      this.halted = reason;
+      if (this.state === 'scanning') {
+        this.teardown();
+        this.setState('idle');
+        this.emit('halt', { reason, stats: this.session.stats() });
+        return;
+      }
+      this.setState('stopping');
+      this.maybeComplete();
+    }
+
+    maybeComplete() {
+      if (this.halted && this.state === 'stopping' && this.inflight.size === 0) {
+        this.teardown();
+        this.setState('idle');
+        this.emit('halt', { reason: this.halted, stats: this.session.stats() });
+      }
+    }
+
+    teardown() {
+      for (const u of this.unsubs) {
+        try {
+          u();
+        } catch (e) {
+          /* ignore */
         }
       }
-      startSignal();
-    });
+      this.unsubs = [];
+    }
+  }
 
-    stopSignalBtn.addEventListener('click', stopSignal);
+  Object.assign(AT, {
+    MARKETS, marketById, round2, sleep, digitOf, erfc, tailBits,
+    TickBuffer, STRATEGIES, STRATEGY_ORDER, defaultConfig, defaultStrategyParams, evaluate,
+    MoneyManager, Session, Trader,
+  });
+  if (typeof module !== 'undefined' && module.exports) module.exports = AT;
+})(typeof window !== 'undefined' ? window : globalThis);
 
-    // Sound toggle (extra)
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 's' || e.key === 'S') {
-        soundEnabled = !soundEnabled;
-        if (soundEnabled) initAudio();
-        addLog(`Sound ${soundEnabled ? 'ON' : 'OFF'}`, 'info');
+/* EMRON AI Auto Trader - clients: SimClient (offline, labelled simulation) and DerivClient (Deriv Options API). */
+(function (root) {
+  'use strict';
+  const AT = (root.AT = root.AT || {});
+  const E = AT; // engine helpers are attached to the same namespace
+
+  class Emitter {
+    constructor() {
+      this._h = {};
+    }
+    on(ev, fn) {
+      (this._h[ev] = this._h[ev] || []).push(fn);
+      return () => (this._h[ev] = (this._h[ev] || []).filter((f) => f !== fn));
+    }
+    emit(ev, data) {
+      (this._h[ev] || []).slice().forEach((f) => {
+        try {
+          f(data);
+        } catch (e) {
+          if (typeof console !== 'undefined') console.error(e);
+        }
+      });
+    }
+  }
+
+  /* contract probability, used by the simulation for payouts */
+  function contractProb(ct, barrier, duration) {
+    const b = barrier == null ? 0 : parseInt(barrier, 10);
+    switch (ct) {
+      case 'DIGITEVEN':
+      case 'DIGITODD':
+        return 0.5;
+      case 'DIGITOVER':
+        return (9 - b) / 10;
+      case 'DIGITUNDER':
+        return b / 10;
+      case 'DIGITMATCH':
+        return 0.1;
+      case 'DIGITDIFF':
+        return 0.9;
+      case 'RUNHIGH':
+      case 'RUNLOW':
+        return Math.pow(0.5, duration || 2);
+      default:
+        return 0.5;
+    }
+  }
+
+  // one tick of a contract's life. c = {contract_type, barrier, duration, seen, prev}; returns {closed, won}
+  function stepContract(c, tick) {
+    c.seen++;
+    const digit = E.digitOf(tick.quote, tick.pip);
+    const b = c.barrier == null ? 0 : parseInt(c.barrier, 10);
+    let closed = false;
+    let won = false;
+    switch (c.contract_type) {
+      case 'DIGITEVEN': closed = true; won = digit % 2 === 0; break;
+      case 'DIGITODD': closed = true; won = digit % 2 === 1; break;
+      case 'DIGITOVER': closed = true; won = digit > b; break;
+      case 'DIGITUNDER': closed = true; won = digit < b; break;
+      case 'DIGITMATCH': closed = true; won = digit === b; break;
+      case 'DIGITDIFF': closed = true; won = digit !== b; break;
+      case 'RUNHIGH':
+      case 'RUNLOW': {
+        if (c.prev == null) { c.prev = tick.quote; c.seen--; break; } // no reference price yet: this tick only sets it
+        const up = c.contract_type === 'RUNHIGH';
+        const ok = up ? tick.quote > c.prev : tick.quote < c.prev;
+        c.prev = tick.quote;
+        if (!ok) { closed = true; won = false; }
+        else if (c.seen >= c.duration) { closed = true; won = true; }
+        break;
       }
-    });
+      default: closed = true; won = false;
+    }
+    return { closed, won };
+  }
 
-    // ─── INIT ──────────────────────────────────────────────────────
-    // Load saved credentials
+  /* ======================= Simulation ======================= */
+  class SimClient extends Emitter {
+    constructor(opts) {
+      super();
+      opts = opts || {};
+      this.speed = opts.speed || 1;
+      this.margin = 0.035; // simulated house margin, so expectancy is negative like the real thing
+      this.balance = opts.balance != null ? opts.balance : 10000;
+      this.currency = 'USD';
+      this.kind = 'sim';
+      this.gens = {};
+      this.contracts = new Map();
+      this.nextId = 1;
+    }
+    async connect() {
+      this.emit('balance', { balance: this.balance, currency: this.currency });
+      return { kind: 'sim', loginid: 'SIM', label: 'Simulation', currency: this.currency, balance: this.balance, isReal: false };
+    }
+    close() {
+      Object.values(this.gens).forEach((g) => clearInterval(g.timer));
+      this.gens = {};
+    }
+    setSpeed(x) {
+      this.speed = x;
+      Object.keys(this.gens).forEach((s) => {
+        const g = this.gens[s];
+        clearInterval(g.timer);
+        g.timer = setInterval(() => this._tick(s), this._ms(s));
+      });
+    }
+    _ms(symbol) {
+      return Math.max(20, (E.marketById(symbol).tickSec * 1000) / this.speed);
+    }
+    _gen(symbol) {
+      if (!this.gens[symbol]) {
+        const m = E.marketById(symbol);
+        const g = { price: 800 + Math.random() * 400, pip: m.pip, epoch: Math.floor(Date.now() / 1000) - 1000, cbs: [], timer: null, vol: 0.0007 };
+        this.gens[symbol] = g;
+      }
+      return this.gens[symbol];
+    }
+    _next(g) {
+      const u1 = Math.random() || 1e-9;
+      const u2 = Math.random();
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      g.price = Math.max(10, g.price * (1 + z * g.vol));
+      g.epoch += 1;
+      return Number(g.price.toFixed(g.pip));
+    }
+    async history(symbol, count) {
+      const g = this._gen(symbol);
+      const prices = [];
+      const times = [];
+      for (let i = 0; i < count; i++) {
+        prices.push(this._next(g));
+        times.push(g.epoch);
+      }
+      return { prices, times, pip: g.pip };
+    }
+    async subscribeTicks(symbol, cb) {
+      const g = this._gen(symbol);
+      g.cbs.push(cb);
+      if (!g.timer) g.timer = setInterval(() => this._tick(symbol), this._ms(symbol));
+      return () => {
+        g.cbs = g.cbs.filter((f) => f !== cb);
+        if (!g.cbs.length && !this._hasContracts(symbol)) {
+          clearInterval(g.timer);
+          g.timer = null;
+        }
+      };
+    }
+    _hasContracts(symbol) {
+      for (const c of this.contracts.values()) if (c.symbol === symbol && !c.closed) return true;
+      return false;
+    }
+    _tick(symbol) {
+      const g = this.gens[symbol];
+      const quote = this._next(g);
+      const tick = { symbol, quote, epoch: g.epoch, pip: g.pip };
+      for (const c of Array.from(this.contracts.values())) if (c.symbol === symbol && !c.closed) this._advance(c, tick);
+      g.cbs.slice().forEach((cb) => cb(tick));
+    }
+    _advance(c, tick) {
+      const { closed, won } = stepContract(c, tick);
+      if (!closed) {
+        c.onUpdate({ id: c.id, closed: false, bid: c.stake, profit: 0, isValidToSell: false, status: 'open' });
+        return;
+      }
+      c.closed = true;
+      const sellPrice = won ? c.payout : 0;
+      const profit = E.round2(sellPrice - c.stake);
+      this.balance = E.round2(this.balance + sellPrice);
+      this.emit('balance', { balance: this.balance, currency: this.currency });
+      c.onUpdate({ id: c.id, closed: true, status: won ? 'won' : 'lost', profit, bid: sellPrice, payout: c.payout, sellPrice, buyPrice: c.stake, isValidToSell: false, exitTick: tick.quote });
+    }
+    async buy(p, onUpdate) {
+      if (p.stake > this.balance) {
+        const e = new Error('Insufficient balance');
+        e.fatal = true;
+        throw e;
+      }
+      const g = this._gen(p.symbol);
+      const prob = contractProb(p.contract_type, p.barrier, p.duration);
+      const payout = E.round2((p.stake * (1 - this.margin)) / prob);
+      const c = { id: this.nextId++, symbol: p.symbol, contract_type: p.contract_type, barrier: p.barrier, duration: p.duration, stake: p.stake, payout, seen: 0, closed: false, prev: g.price, onUpdate };
+      this.balance = E.round2(this.balance - p.stake);
+      this.emit('balance', { balance: this.balance, currency: this.currency });
+      this.contracts.set(c.id, c);
+      if (!g.timer) g.timer = setInterval(() => this._tick(p.symbol), this._ms(p.symbol));
+      return { contract_id: c.id, buy_price: p.stake, payout, start_time: Math.floor(Date.now() / 1000) };
+    }
+    async sell() {
+      throw new Error('This simulated contract cannot be sold early');
+    }
+  }
+
+  /* ======================= Deriv Options API ======================= */
+  const API_BASE = 'https://api.derivws.com';
+  const PUBLIC_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
+
+  class ApiError extends Error {
+    constructor(message, code, fatal) {
+      super(message);
+      this.code = code;
+      this.fatal = !!fatal;
+    }
+  }
+
+  function normContract(c) {
+    const num = (v) => (v == null || v === '' ? null : Number(v));
+    const status = c.status || null;
+    const closed = c.is_sold === 1 || c.is_sold === true || status === 'won' || status === 'lost' || status === 'sold' || status === 'cancelled';
+    return {
+      id: c.contract_id,
+      closed,
+      status,
+      profit: num(c.profit),
+      bid: num(c.bid_price),
+      payout: num(c.payout),
+      buyPrice: num(c.buy_price),
+      sellPrice: num(c.sell_price),
+      isValidToSell: c.is_valid_to_sell === 1 || c.is_valid_to_sell === true,
+      entryTick: c.entry_tick,
+      exitTick: c.exit_tick,
+    };
+  }
+
+  function normAccounts(json) {
+    let arr = [];
+    if (Array.isArray(json)) arr = json;
+    else if (json && Array.isArray(json.data)) arr = json.data;
+    else if (json && json.data && Array.isArray(json.data.accounts)) arr = json.data.accounts;
+    else if (json && Array.isArray(json.accounts)) arr = json.accounts;
+    else if (json && json.data && typeof json.data === 'object') arr = Object.values(json.data);
+    return arr
+      .filter((a) => a && typeof a === 'object')
+      .map((a) => {
+        const id = a.account_id || a.loginid || a.id || '';
+        const type = String(a.account_type || a.type || (/^D/i.test(id) ? 'demo' : 'real')).toLowerCase();
+        return { id, type: type.indexOf('demo') >= 0 || type.indexOf('virtual') >= 0 ? 'demo' : 'real', currency: a.currency || 'USD', balance: a.balance != null ? Number(a.balance) : null, raw: a };
+      })
+      .filter((a) => a.id);
+  }
+
+  /* shared WebSocket plumbing: request/response routing, tick subscriptions, heartbeat, reconnect */
+  class WsBase extends Emitter {
+    constructor() {
+      super();
+      this.balance = null;
+      this.currency = 'USD';
+      this.reqId = 0;
+      this.pending = new Map();
+      this.tickCbs = {};
+      this.tickSubs = {};
+      this.contracts = new Map(); // id -> {cb, seen, done}
+      this.pocCache = new Map();
+      this.manualClose = false;
+      this.ws = null;
+      this.lastMsg = 0;
+      this.hbTimer = null;
+      this.heartbeatMs = 30000;
+    }
+
+    _openSocket() {
+      throw new Error('not implemented');
+    }
+
+    // open `url` and resolve when the socket is open
+    _wire(url) {
+      return new Promise((resolve, reject) => {
+        let ws;
+        try {
+          ws = new WebSocket(url);
+        } catch (e) {
+          reject(new ApiError('The WebSocket address was refused (' + (e.message || e) + ').', 'ws_error', true));
+          return;
+        }
+        this.ws = ws;
+        const timer = setTimeout(() => {
+          try { ws.close(); } catch (e) { /* ignore */ }
+          reject(new ApiError('Timed out opening the Deriv WebSocket.', 'ws_timeout', true));
+        }, 15000);
+        ws.onopen = () => {
+          clearTimeout(timer);
+          this.lastMsg = Date.now();
+          this._heartbeat(ws);
+          resolve();
+        };
+        ws.onerror = () => {
+          clearTimeout(timer);
+          reject(new ApiError('The Deriv WebSocket could not be opened.', 'ws_error', true));
+        };
+        ws.onmessage = (ev) => {
+          this.lastMsg = Date.now();
+          this._onMessage(ev.data);
+        };
+        ws.onclose = () => this._onClose(ws);
+      });
+    }
+
+    _heartbeat(ws) {
+      clearInterval(this.hbTimer);
+      if (!this.heartbeatMs) return;
+      this.hbTimer = setInterval(() => {
+        if (ws !== this.ws || ws.readyState !== 1) return;
+        if (Date.now() - this.lastMsg > this.heartbeatMs * 2.5) {
+          try { ws.close(); } catch (e) { /* ignore */ }
+          return;
+        }
+        try { ws.send(JSON.stringify({ ping: 1 })); } catch (e) { /* the close handler reconnects */ }
+      }, this.heartbeatMs);
+    }
+
+    // after a (re)connect: put every subscription back
+    _restore() {
+      for (const s of Object.keys(this.tickCbs)) this._subscribeTicksWire(s);
+    }
+
+    _onClose(ws) {
+      if (ws !== this.ws) return;
+      clearInterval(this.hbTimer);
+      for (const [, p] of this.pending) {
+        clearTimeout(p.t);
+        p.rej(new ApiError('Connection closed', 'closed'));
+      }
+      this.pending.clear();
+      if (this.manualClose) return;
+      this.emit('status', 'disconnected');
+      this._reconnect(0);
+    }
+
+    async _reconnect(attempt) {
+      if (this.manualClose) return;
+      if (attempt >= 6) {
+        this.emit('status', 'failed');
+        return;
+      }
+      this.emit('status', 'reconnecting');
+      await E.sleep(Math.min(8000, 800 * Math.pow(2, attempt)));
+      if (this.manualClose) return;
+      try {
+        await this._openSocket(); // Deriv account sockets need a new one-time password every time
+        this._restore();
+        this.emit('status', 'connected');
+      } catch (e) {
+        this._reconnect(attempt + 1);
+      }
+    }
+
+    close() {
+      this.manualClose = true;
+      clearInterval(this.hbTimer);
+      try {
+        this.ws && this.ws.close();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    send(obj) {
+      if (!this.ws || this.ws.readyState !== 1) throw new ApiError('Not connected', 'closed');
+      this.ws.send(JSON.stringify(obj));
+    }
+
+    request(obj, ms) {
+      return new Promise((resolve, reject) => {
+        const id = ++this.reqId;
+        obj.req_id = id;
+        const t = setTimeout(() => {
+          this.pending.delete(id);
+          reject(new ApiError('Request timed out (' + Object.keys(obj)[0] + ')', 'timeout'));
+        }, ms || 15000);
+        this.pending.set(id, { res: resolve, rej: reject, t });
+        try {
+          this.ws.send(JSON.stringify(obj));
+        } catch (e) {
+          clearTimeout(t);
+          this.pending.delete(id);
+          reject(new ApiError('Not connected', 'closed'));
+        }
+      });
+    }
+
+    _onMessage(raw) {
+      let msg;
+      try {
+        msg = JSON.parse(raw);
+      } catch (e) {
+        return;
+      }
+      const type = msg.msg_type;
+      if (type === 'ping' || type === 'pong') return;
+      const p = msg.req_id != null ? this.pending.get(msg.req_id) : null;
+      if (msg.error) {
+        if (msg.echo_req && msg.echo_req.ping) return;
+        const err = new ApiError(msg.error.message || 'API error', msg.error.code, /AuthorizationRequired|InvalidToken|AccountDisabled/.test(msg.error.code || ''));
+        if (p) {
+          clearTimeout(p.t);
+          this.pending.delete(msg.req_id);
+          p.rej(err);
+        } else this.emit('error', err);
+        return;
+      }
+      if (type === 'tick' && msg.tick) {
+        const sym = msg.tick.underlying_symbol || msg.tick.symbol || (msg.echo_req && msg.echo_req.ticks);
+        if (msg.subscription && sym) this.tickSubs[sym] = msg.subscription.id;
+        (this.tickCbs[sym] || []).slice().forEach((cb) => cb({ symbol: sym, quote: msg.tick.quote, epoch: msg.tick.epoch, pip: msg.tick.pip_size }));
+      } else if (type === 'balance' && msg.balance) {
+        this.balance = Number(msg.balance.balance);
+        if (msg.balance.currency) this.currency = msg.balance.currency;
+        this.emit('balance', { balance: this.balance, currency: this.currency });
+      } else if (type === 'proposal_open_contract' && msg.proposal_open_contract) {
+        const c = normContract(msg.proposal_open_contract);
+        const reg = this.contracts.get(c.id);
+        if (reg) {
+          reg.seen = true;
+          if (c.closed) reg.done = true;
+          reg.cb(c);
+        } else this.pocCache.set(c.id, c);
+      }
+      if (p) {
+        clearTimeout(p.t);
+        this.pending.delete(msg.req_id);
+        p.res(msg);
+      }
+    }
+
+    async history(symbol, count) {
+      let msg;
+      try {
+        msg = await this.request({ ticks_history: symbol, count, end: 'latest', style: 'ticks' });
+      } catch (e) {
+        if (e.code === 'closed' || e.code === 'timeout') throw e;
+        msg = await this.request({ ticks_history: 1, underlying_symbol: symbol, count, end: 'latest', style: 'ticks' });
+      }
+      const h = msg.history || {};
+      return { prices: (h.prices || []).map(Number), times: (h.times || []).map(Number), pip: msg.pip_size != null ? msg.pip_size : undefined };
+    }
+
+    _subscribeTicksWire(symbol) {
+      try {
+        this.send({ ticks: symbol, subscribe: 1 });
+      } catch (e) {
+        /* reconnect will retry */
+      }
+    }
+
+    async subscribeTicks(symbol, cb) {
+      const first = !this.tickCbs[symbol];
+      (this.tickCbs[symbol] = this.tickCbs[symbol] || []).push(cb);
+      if (first) this._subscribeTicksWire(symbol);
+      return () => {
+        this.tickCbs[symbol] = (this.tickCbs[symbol] || []).filter((f) => f !== cb);
+        if (!this.tickCbs[symbol].length) {
+          delete this.tickCbs[symbol];
+          const sid = this.tickSubs[symbol];
+          if (sid) {
+            try {
+              this.send({ forget: sid });
+            } catch (e) {
+              /* ignore */
+            }
+            delete this.tickSubs[symbol];
+          }
+        }
+      };
+    }
+  }
+
+  /* ---------- the trading account (demo or real) ---------- */
+  class DerivClient extends WsBase {
+    constructor(opts) {
+      super();
+      this.token = opts.token;
+      this.appId = opts.appId;
+      this.accountId = opts.accountId || null;
+      this.prefer = opts.prefer || 'demo';
+      this.apiBase = opts.apiBase || API_BASE;
+      this.kind = 'deriv';
+      this.accounts = [];
+    }
+
+    async _api(method, path) {
+      const headers = { Authorization: 'Bearer ' + this.token, 'Content-Type': 'application/json' };
+      if (this.appId) headers['Deriv-App-ID'] = String(this.appId);
+      let res;
+      try {
+        res = await fetch(this.apiBase + path, { method, headers });
+      } catch (e) {
+        throw new ApiError('Could not reach Deriv (' + (e.message || 'network error') + '). Check your connection, and that this page is not blocking requests to api.derivws.com.', 'network', true);
+      }
+      let json = {};
+      try {
+        json = await res.json();
+      } catch (e) {
+        /* empty body */
+      }
+      if (!res.ok) {
+        const first = json && json.errors && json.errors[0];
+        const msg = (first && first.message) || (json && (json.message || (json.error && (json.error.message || json.error)))) || 'HTTP ' + res.status;
+        const hint = res.status === 401 ? ' Your token is missing, wrong or expired.' : res.status === 403 ? ' The token is not allowed to trade, or the app id is wrong.' : '';
+        throw new ApiError(String(msg) + '.' + hint, 'http_' + res.status, true);
+      }
+      return json;
+    }
+
+    async listAccounts() {
+      this.accounts = normAccounts(await this._api('GET', '/trading/v1/options/accounts'));
+      return this.accounts;
+    }
+
+    async connect() {
+      this.manualClose = false;
+      const list = await this.listAccounts();
+      if (!list.length) throw new ApiError('Deriv returned no Options accounts for this token.', 'no_accounts', true);
+      let acc = this.accountId ? list.find((a) => a.id === this.accountId) : null;
+      if (!acc) acc = list.find((a) => a.type === this.prefer) || list[0];
+      this.account = acc;
+      this.accountId = acc.id;
+      this.currency = acc.currency;
+      if (acc.balance != null) this.balance = acc.balance;
+      await this._openSocket();
+      this.send({ balance: 1, subscribe: 1 });
+      return { kind: 'deriv', loginid: acc.id, label: acc.type === 'demo' ? 'Demo account' : 'Real account', currency: acc.currency, balance: this.balance, isReal: acc.type !== 'demo', accounts: list };
+    }
+
+    async _openSocket() {
+      const otp = await this._api('POST', '/trading/v1/options/accounts/' + encodeURIComponent(this.accountId) + '/otp');
+      const url = (otp && otp.data && otp.data.url) || (otp && otp.url);
+      if (!url) throw new ApiError('Deriv did not return a WebSocket address.', 'no_url', true);
+      await this._wire(url);
+    }
+
+    _restore() {
+      this.send({ balance: 1, subscribe: 1 });
+      super._restore();
+      for (const [id, c] of this.contracts) if (!c.done) this.send({ proposal_open_contract: 1, contract_id: id, subscribe: 1 });
+    }
+
+    async buy(p, onUpdate) {
+      const parameters = { amount: p.stake, basis: 'stake', contract_type: p.contract_type, currency: this.currency, duration: p.duration, duration_unit: p.duration_unit || 't', underlying_symbol: p.symbol };
+      if (p.barrier != null) parameters.barrier = String(p.barrier);
+      let msg;
+      if (this.viaProposal) msg = await this._buyViaProposal(parameters, p.stake);
+      else {
+        try {
+          msg = await this.request({ buy: 1, price: p.stake, parameters, subscribe: 1 }, 12000);
+        } catch (e) {
+          // A timeout or a closed socket leaves the outcome unknown, so those are never retried (it could double-buy).
+          // Any other refusal means nothing was bought; unless it is about money, access or the market, try quote-then-buy.
+          const code = e.code || '';
+          const unclear = code === 'timeout' || code === 'closed' || code === 'network';
+          const final = /Balance|Authorization|Token|Permission|RateLimit|MarketIsClosed|Offerings|Disabled|Suspended/i.test(code + ' ' + (e.message || ''));
+          if (unclear || final) throw e;
+          msg = await this._buyViaProposal(parameters, p.stake);
+          this.viaProposal = true;
+          this.emit('note', 'Deriv refused the one-step buy (' + (e.message || code) + '). Using quote-then-buy from now on.');
+        }
+      }
+      const b = msg.buy;
+      if (!b) throw new ApiError('Unexpected buy response', 'bad_response');
+      const id = b.contract_id;
+      const reg = { cb: onUpdate, seen: false, done: false };
+      this.contracts.set(id, reg);
+      const cached = this.pocCache.get(id);
+      if (cached) {
+        this.pocCache.delete(id);
+        reg.seen = true;
+        if (cached.closed) reg.done = true;
+        onUpdate(cached);
+      }
+      // safety net: make sure the contract is streamed even if the buy did not subscribe
+      setTimeout(() => {
+        if (!reg.seen && !reg.done) {
+          try {
+            this.send({ proposal_open_contract: 1, contract_id: id, subscribe: 1 });
+          } catch (e) { /* ignore */ }
+        }
+      }, 2500);
+      if (b.balance_after != null) {
+        this.balance = Number(b.balance_after);
+        this.emit('balance', { balance: this.balance, currency: this.currency });
+      }
+      return { contract_id: id, buy_price: Number(b.buy_price), payout: Number(b.payout), start_time: b.start_time };
+    }
+
+    async _buyViaProposal(parameters, stake) {
+      const q = await this.request(Object.assign({ proposal: 1 }, parameters), 8000);
+      if (!q.proposal || !q.proposal.id) throw new ApiError('Deriv returned no quote for this contract.', 'bad_response');
+      return this.request({ buy: q.proposal.id, price: stake, subscribe: 1 }, 12000);
+    }
+
+    async sell(id) {
+      return this.request({ sell: id, price: 0 });
+    }
+
+    refresh(id) {
+      try {
+        this.send({ proposal_open_contract: 1, contract_id: id, subscribe: 1 });
+      } catch (e) {
+        /* reconnect handles it */
+      }
+    }
+  }
+
+  /* ---------- public market feed: ticks and history, no token needed ---------- */
+  class PublicClient extends WsBase {
+    constructor(opts) {
+      super();
+      opts = opts || {};
+      this.url = opts.url || PUBLIC_URL;
+      this.kind = 'public';
+    }
+    _openSocket() {
+      return this._wire(this.url);
+    }
+    // keeps trying until the socket opens (or close() is called)
+    async start() {
+      this.manualClose = false;
+      for (let attempt = 0; !this.manualClose; attempt++) {
+        try {
+          this.emit('status', 'connecting');
+          await this._openSocket();
+          this._restore();
+          this.emit('status', 'connected');
+          return true;
+        } catch (e) {
+          this.emit('status', 'offline');
+          this.emit('error', e);
+          await E.sleep(Math.min(15000, 1000 * Math.pow(2, attempt)));
+        }
+      }
+      return false;
+    }
+    // a live price quote for a contract (nothing is bought)
+    async quote(params, ms) {
+      const msg = await this.request(Object.assign({ proposal: 1 }, params), ms || 4000);
+      return msg.proposal;
+    }
+  }
+
+  /* ---------- paper trading: live ticks, virtual money, quoted (or modelled) payouts ---------- */
+  class PaperClient extends Emitter {
+    constructor(opts) {
+      super();
+      opts = opts || {};
+      this.feed = opts.feed;
+      this.margin = opts.margin != null ? opts.margin : 0.035;
+      this.balance = opts.balance != null ? opts.balance : 10000;
+      this.useQuotes = opts.useQuotes !== false;
+      this.currency = 'USD';
+      this.kind = 'paper';
+      this.contracts = new Map();
+      this.last = {}; // latest quote per symbol
+      this.nextId = 1;
+    }
+    async connect() {
+      this.emit('balance', { balance: this.balance, currency: this.currency });
+      return { kind: 'paper', loginid: 'PAPER', label: 'Paper trading', currency: this.currency, balance: this.balance, isReal: false };
+    }
+    close() {
+      for (const c of this.contracts.values()) if (c.unsub) c.unsub();
+      this.contracts.clear();
+    }
+    history(symbol, count) {
+      return this.feed.history(symbol, count);
+    }
+    subscribeTicks(symbol, cb) {
+      return this.feed.subscribeTicks(symbol, (t) => {
+        this.last[symbol] = t.quote;
+        cb(t);
+      });
+    }
+    async buy(p, onUpdate) {
+      if (p.stake > this.balance) {
+        const e = new Error('Insufficient balance');
+        e.fatal = true;
+        throw e;
+      }
+      const prob = contractProb(p.contract_type, p.barrier, p.duration);
+      let payout = E.round2((p.stake * (1 - this.margin)) / prob);
+      let source = 'modelled';
+      if (this.useQuotes && this.feed && this.feed.quote) {
+        try {
+          const params = { amount: p.stake, basis: 'stake', contract_type: p.contract_type, currency: this.currency, duration: p.duration, duration_unit: p.duration_unit || 't', underlying_symbol: p.symbol };
+          if (p.barrier != null) params.barrier = String(p.barrier);
+          const q = await this.feed.quote(params, 2500);
+          const ask = Number(q && q.ask_price);
+          const pay = Number(q && q.payout);
+          if (pay > ask && ask > 0) {
+            payout = E.round2((pay * p.stake) / ask);
+            source = 'quoted';
+          }
+        } catch (e) {
+          /* keep the modelled payout */
+        }
+      }
+      if (p.stake > this.balance) {
+        const e = new Error('Insufficient balance');
+        e.fatal = true;
+        throw e;
+      }
+      const c = { id: this.nextId++, symbol: p.symbol, contract_type: p.contract_type, barrier: p.barrier, duration: p.duration, stake: p.stake, payout, seen: 0, closed: false, prev: this.last[p.symbol], onUpdate };
+      this.balance = E.round2(this.balance - p.stake);
+      this.emit('balance', { balance: this.balance, currency: this.currency });
+      this.contracts.set(c.id, c);
+      c.unsub = await this.subscribeTicks(p.symbol, (tick) => this._advance(c, tick));
+      return { contract_id: c.id, buy_price: p.stake, payout, payout_source: source, start_time: Math.floor(Date.now() / 1000) };
+    }
+    _advance(c, tick) {
+      if (c.closed) return;
+      const { closed, won } = stepContract(c, tick);
+      if (!closed) {
+        c.onUpdate({ id: c.id, closed: false, bid: c.stake, profit: 0, isValidToSell: false, status: 'open' });
+        return;
+      }
+      c.closed = true;
+      const sellPrice = won ? c.payout : 0;
+      const profit = E.round2(sellPrice - c.stake);
+      this.balance = E.round2(this.balance + sellPrice);
+      this.emit('balance', { balance: this.balance, currency: this.currency });
+      c.onUpdate({ id: c.id, closed: true, status: won ? 'won' : 'lost', profit, bid: sellPrice, payout: c.payout, sellPrice, buyPrice: c.stake, isValidToSell: false, exitTick: tick.quote });
+      const u = c.unsub;
+      this.contracts.delete(c.id);
+      if (u) setTimeout(u, 0);
+    }
+    async sell() {
+      throw new Error('A paper contract cannot be sold early');
+    }
+  }
+
+  Object.assign(AT, { Emitter, SimClient, DerivClient, PublicClient, PaperClient, WsBase, normContract, normAccounts, contractProb, stepContract, ApiError, API_BASE, PUBLIC_URL });
+  if (typeof module !== 'undefined' && module.exports) module.exports = AT;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* EMRON AI Auto Trader - analysis: replay the strategies over recorded ticks (no DOM, no network). */
+(function (root) {
+  'use strict';
+  const AT = (root.AT = root.AT || {});
+
+  // How a contract bought right after tick i ends, using the ticks that follow (same rules as the simulation).
+  function outcome(sig, q, digits, i) {
+    const t = sig.contract_type;
+    const b = sig.barrier == null ? 0 : parseInt(sig.barrier, 10);
+    if (t === 'RUNHIGH' || t === 'RUNLOW') {
+      for (let k = 1; k <= sig.duration; k++) {
+        const up = q[i + k] > q[i + k - 1];
+        const down = q[i + k] < q[i + k - 1];
+        if (t === 'RUNHIGH' ? !up : !down) return { won: false, ticks: k };
+      }
+      return { won: true, ticks: sig.duration };
+    }
+    const d = digits[i + 1];
+    let won = false;
+    if (t === 'DIGITEVEN') won = d % 2 === 0;
+    else if (t === 'DIGITODD') won = d % 2 === 1;
+    else if (t === 'DIGITOVER') won = d > b;
+    else if (t === 'DIGITUNDER') won = d < b;
+    else if (t === 'DIGITMATCH') won = d === b;
+    else if (t === 'DIGITDIFF') won = d !== b;
+    return { won, ticks: 1 };
+  }
+
+  /*
+   * Walk through `quotes` once per strategy, exactly as the live trader would (one contract at a time,
+   * a signal is taken the moment the rule fires), and report how often it won against how often a fair
+   * coin of the same odds would have. Flat stakes, no recovery, so the numbers are about the rule itself.
+   */
+  function backtest(quotes, pip, cfg, opts) {
+    opts = opts || {};
+    const margin = opts.margin != null ? opts.margin : 0.035;
+    const warm = opts.warmup != null ? opts.warmup : 200;
+    const ids = cfg.strategy === 'mix' ? cfg.mixIncludes : [cfg.strategy];
+    const digits = quotes.map((x) => AT.digitOf(x, pip));
+    const out = [];
+    for (const id of ids) {
+      const strat = AT.STRATEGIES[id];
+      if (!strat) continue;
+      const one = Object.assign({}, cfg, { strategy: id });
+      const buf = new AT.TickBuffer('backtest', pip, 1000);
+      let signals = 0;
+      let wins = 0;
+      let expected = 0;
+      let variance = 0;
+      let pl = 0;
+      let next = 0;
+      for (let i = 0; i < quotes.length; i++) {
+        buf.push(quotes[i], i + 1);
+        if (i < warm || i < next) continue;
+        const s = AT.evaluate(buf, one);
+        if (!s) continue;
+        if (i + s.duration + 1 >= quotes.length) break;
+        const r = outcome(s, quotes, digits, i);
+        const p = AT.contractProb(s.contract_type, s.barrier, s.duration);
+        signals++;
+        expected += p;
+        variance += p * (1 - p);
+        if (r.won) {
+          wins++;
+          pl += (1 - margin) / p - 1;
+        } else pl -= 1;
+        next = i + r.ticks;
+      }
+      out.push({
+        id,
+        label: strat.label,
+        signals,
+        wins,
+        hit: signals ? wins / signals : 0,
+        expectedHit: signals ? expected / signals : 0,
+        z: variance > 0 ? (wins - expected) / Math.sqrt(variance) : 0,
+        flatPL: AT.round2(pl), // in units of one stake, at the modelled house margin
+      });
+    }
+    return { ticks: quotes.length, warmup: warm, margin, results: out };
+  }
+
+  AT.backtest = backtest;
+  if (typeof module !== 'undefined' && module.exports) module.exports = AT;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* EMRON Autopilot - UI glue for the trading engine (engine.js, client.js, analysis.js are loaded before this). */
+(function () {
+  'use strict';
+  const AT = window.AT;
+  const APP_ID = '34c3rTXvfnC6XKk5nbzJM';
+  const BUF = 1000;
+  const MK = AT.MARKETS;
+  const $ = (id) => document.getElementById(id);
+  const money = (x) => (Number.isFinite(Number(x)) ? Number(x).toFixed(2) : '—');
+  const signed = (x) => (x > 0 ? '+' : x < 0 ? '−' : '') + money(Math.abs(x));
+  const pct = (x) => (Number.isFinite(Number(x)) ? (Number(x) * 100).toFixed(1) + '%' : '—');
+  const clock = () => new Date().toLocaleTimeString([], { hour12: false });
+
+  const MODE_TEXT = { research: 'RESEARCH', paper: 'PAPER', sim: 'SIMULATION', execute: 'DERIV ACCOUNT' };
+  const MODE_HINT = {
+    research: 'Watches the live feed and reports when a rule would trade. No orders, no virtual money.',
+    paper: 'Real live ticks, virtual money, payouts taken from live Deriv price quotes. Nothing is bought.',
+    sim: 'Random ticks generated here at Deriv speed, with a 3.5% house margin. Works with no internet.',
+    execute: 'Buys real contracts on the connected Deriv account. Start on the demo account.',
+  };
+  const REASON = {
+    'take-profit': 'Target profit reached',
+    'stop-loss': 'Stop loss reached',
+    'max-steps': 'Maximum recovery steps reached',
+    'max-trades': 'Maximum number of trades reached',
+    'insufficient-balance': 'Balance too low for the next stake',
+    manual: 'Stopped by you',
+    error: 'Stopped after an error',
+  };
+
+  /* ---------------- state ---------------- */
+  const S = {
+    mode: 'demo', // demo | real, for the account connection
+    client: null, // connected Deriv account
+    acct: null,
+    ready: false,
+    connecting: false,
+    feed: null,
+    bufs: {},
+    loaded: {},
+    sig: {},
+    session: new AT.Session(),
+    trader: null,
+    active: null,
+    run: false,
+    state: 'idle',
+    reconcile: false,
+    cfg: null,
+    renderT: 0,
+    tradeT: 0,
+    sel: '1HZ100V',
+  };
+  const PV = AT.defaultStrategyParams(); // strategy parameter values
+  let MIX = AT.STRATEGY_ORDER.slice(); // strategies included in the AI Mix
+  MK.forEach((m) => (S.bufs[m.id] = new AT.TickBuffer(m.id, m.pip, BUF)));
+
+  /* ---------------- small UI helpers ---------------- */
+  function terminal(message, kind) {
+    const el = document.createElement('div');
+    el.className = 'term-line ' + (kind || 'info');
+    const tm = document.createElement('span');
+    tm.className = 'term-time';
+    tm.textContent = '[' + clock() + ']';
+    const msg = document.createElement('span');
+    msg.className = 'term-msg';
+    msg.textContent = String(message);
+    el.append(tm, msg);
+    const t = $('terminal');
+    t.prepend(el);
+    while (t.children.length > 80) t.lastElementChild.remove();
+  }
+  function statusChip(id, text, mode) {
+    $(id).className = 'status-chip' + (mode ? ' ' + mode : '');
+    const s = $(id).querySelector('span');
+    if (s) s.textContent = text;
+  }
+  function botState(text, mode) {
+    $('state').textContent = String(text).toUpperCase();
+    $('state').className = 'pill' + (mode ? ' ' + mode : '');
+    $('consoleMode').textContent = S.run ? MODE_TEXT[$('execMode').value] + ' · LIVE' : 'WATCH MODE';
+  }
+  setInterval(() => ($('clock').textContent = clock()), 1000);
+  $('clock').textContent = clock();
+
+  /* ---------------- settings -> config ---------------- */
+  const num = (id, d) => {
+    const v = Number($(id).value);
+    return Number.isFinite(v) ? v : d;
+  };
+  function readCfg() {
+    const c = AT.defaultConfig();
+    c.strategy = $('strat').value;
+    c.strat = JSON.parse(JSON.stringify(PV));
+    c.mixIncludes = MIX.slice();
+    const mode = $('execMode').value;
+    c.markets = $('allMk').checked ? MK.map((m) => m.id) : [$('sym').value];
+    c.money = {
+      stake: num('stake', 1),
+      multiplier: Math.max(1, num('mult', 1.6)),
+      maxSteps: Math.max(0, Math.floor(num('steps', 4))),
+      onMaxSteps: $('onMax').value,
+      takeProfit: Math.max(0, num('tp', 0)),
+      stopLoss: Math.max(0, num('ml', 0)),
+      maxStake: Math.max(0, num('maxStake', 0)),
+    };
+    c.maxOpen = Math.min(5, Math.max(1, Math.floor(num('maxOpen', 1))));
+    c.scanMs = 3500;
+    c.observe = mode === 'research';
+    return c;
+  }
+  function chain(c) {
+    const m = c.money;
+    const stakes = [];
+    for (let i = 0; i <= m.maxSteps; i++) {
+      let s = AT.round2(m.stake * Math.pow(m.multiplier, i));
+      if (m.maxStake > 0 && s > m.maxStake) s = AT.round2(m.maxStake);
+      stakes.push(s);
+    }
+    return { stakes, total: AT.round2(stakes.reduce((a, b) => a + b, 0)) };
+  }
+  function updateRisk() {
+    const c = S.cfg;
+    const ch = chain(c);
+    const shown = ch.stakes.slice(0, 7).map(money).join(' → ') + (ch.stakes.length > 7 ? ' …' : '');
+    $('riskNote').textContent =
+      'Worst case: ' + ch.stakes.length + ' losses in a row stakes ' + money(ch.total) + ' (' + shown + '). Take profit ' + (c.money.takeProfit ? '+' + money(c.money.takeProfit) : 'off') + ', stop loss ' + (c.money.stopLoss ? '−' + money(c.money.stopLoss) : 'off') + '. Digits are random and every contract pays slightly less than fair odds, so no setting makes the expected result positive.';
+  }
+  function onCfgChanged() {
+    S.cfg = readCfg();
+    updateRisk();
+    scheduleRender();
+  }
+
+  /* ---------------- strategy parameter form ---------------- */
+  function visible(sid, p) {
+    if (!p.show) return true;
+    return Object.keys(p.show).every((k) => p.show[k].indexOf(String(PV[sid][k])) >= 0);
+  }
+  function paramField(sid, p) {
+    const wrap = document.createElement('div');
+    wrap.className = 'field';
+    const lab = document.createElement('label');
+    lab.textContent = p.label;
+    wrap.append(lab);
+    let el;
+    if (p.type === 'select') {
+      el = document.createElement('select');
+      for (const o of p.options) {
+        const opt = document.createElement('option');
+        opt.value = o[0];
+        opt.textContent = o[1];
+        el.append(opt);
+      }
+      el.value = String(PV[sid][p.key]);
+    } else {
+      el = document.createElement('input');
+      el.type = p.type === 'number' ? 'number' : 'text';
+      if (p.type === 'number') {
+        el.min = p.min;
+        el.max = p.max;
+        el.step = 1;
+      }
+      el.value = PV[sid][p.key];
+    }
+    el.addEventListener('change', () => {
+      let v = el.value;
+      if (p.type === 'number') {
+        v = Number(v);
+        if (!Number.isFinite(v)) v = p.def;
+        v = Math.min(p.max, Math.max(p.min, Math.round(v)));
+      }
+      PV[sid][p.key] = v;
+      renderParams();
+      onCfgChanged();
+    });
+    wrap.append(el);
+    return wrap;
+  }
+  function renderParams() {
+    const sel = $('strat').value;
+    const box = $('stratParams');
+    box.innerHTML = '';
+    const ids = sel === 'mix' ? MIX : [sel];
+    for (const sid of ids) {
+      const st = AT.STRATEGIES[sid];
+      if (sel === 'mix') {
+        const h = document.createElement('div');
+        h.className = 'eyebrow';
+        h.textContent = st.label;
+        box.append(h);
+      }
+      for (const p of st.params) if (visible(sid, p)) box.append(paramField(sid, p));
+    }
+    $('stratHint').textContent = sel === 'mix' ? 'Runs every ticked strategy and takes the rarest signal on each tick.' : AT.STRATEGIES[sel].blurb;
+    lockInputs();
+  }
+  function renderMix() {
+    const box = $('mixBox');
+    box.innerHTML = '';
+    box.style.display = $('strat').value === 'mix' ? 'block' : 'none';
+    if ($('strat').value !== 'mix') return;
+    const h = document.createElement('div');
+    h.className = 'eyebrow';
+    h.textContent = 'Strategies in the mix';
+    box.append(h);
+    for (const sid of AT.STRATEGY_ORDER) {
+      const l = document.createElement('label');
+      l.className = 'small-check';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = MIX.indexOf(sid) >= 0;
+      cb.dataset.mix = sid;
+      l.append(cb, document.createTextNode(AT.STRATEGIES[sid].label));
+      box.append(l);
+    }
+  }
+  $('mixBox').addEventListener('change', (e) => {
+    const sid = e.target.dataset && e.target.dataset.mix;
+    if (!sid) return;
+    const next = AT.STRATEGY_ORDER.filter((id) => (id === sid ? e.target.checked : MIX.indexOf(id) >= 0));
+    if (!next.length) {
+      e.target.checked = true;
+      terminal('The mix needs at least one strategy.', 'warn');
+      return;
+    }
+    MIX = next;
+    renderParams();
+    onCfgChanged();
+  });
+
+  /* ---------------- market watch (public feed) ---------------- */
+  function buildGrid() {
+    $('sym').innerHTML = MK.map((m) => `<option value="${m.id}">${m.id} · ${m.name}</option>`).join('');
+    $('sym').value = S.sel;
+    $('marketsGrid').innerHTML = MK.map(
+      (m) => `<article class="market-card" id="card_${m.id}" data-symbol="${m.id}" tabindex="0" role="button" aria-label="Select ${m.id}">
+    <div class="market-top"><div><div class="market-name">${m.name}</div><div class="market-symbol">${m.id}</div></div><span class="pill" id="pill_${m.id}">WARMING</span></div>
+    <div class="market-price" id="price_${m.id}">—</div><div class="market-change neutral" id="change_${m.id}">Window change —</div>
+    <div class="market-bottom"><span class="market-state" id="state_${m.id}">Loading ticks…</span><span class="mono" id="ticks_${m.id}">0</span></div>
+  </article>`
+    ).join('');
+    for (const m of MK) {
+      const c = $('card_' + m.id);
+      c.addEventListener('click', () => selectMarket(m.id));
+      c.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectMarket(m.id);
+        }
+      });
+    }
+    $('digitBars').innerHTML = Array.from({ length: 10 }, (_, i) => `<div class="digit-col"><span class="digit-count" id="dc_${i}">0</span><div class="bar-track"><div class="bar-fill" id="db_${i}" style="height:2%"></div></div><span class="digit-num">${i}</span></div>`).join('');
+  }
+  function selectMarket(id) {
+    S.sel = id;
+    $('sym').value = id;
+    onCfgChanged();
+  }
+  async function loadMarket(id) {
     try {
-      const saved = localStorage.getItem('deriv_creds');
-      if (saved) {
-        const cred = JSON.parse(saved);
-        if (cred.appId) appIdInput.value = cred.appId;
-        if (cred.token) apiTokenInput.value = cred.token;
+      const h = await S.feed.history(id, BUF);
+      const buf = S.bufs[id];
+      if (h.pip != null) buf.pip = h.pip;
+      buf.load(h.prices, h.times);
+      S.loaded[id] = buf.length > 0;
+    } catch (e) {
+      terminal(id + ': tick history failed (' + e.message + ')', 'warn');
+    }
+    scheduleRender();
+  }
+  function onFeedTick(id, t) {
+    const buf = S.bufs[id];
+    if (t.pip != null && t.pip !== buf.pip) buf.pip = t.pip;
+    if (buf.push(t.quote, t.epoch)) scheduleRender();
+  }
+  async function bootFeed() {
+    const feed = (S.feed = new AT.PublicClient({ url: AT.PUBLIC_URL }));
+    let booted = false;
+    feed.on('status', (st) => {
+      if (st === 'connected') {
+        statusChip('feedChip', 'FEED LIVE', 'on');
+        $('marketStatus').querySelector('span').textContent = booted ? 'RESYNCING' : 'HISTORY LOADING';
+        if (booted) {
+          terminal('Public feed reconnected; reloading tick history.', 'good');
+          Promise.all(MK.map((m) => loadMarket(m.id))).then(() => ($('marketStatus').querySelector('span').textContent = MK.length + ' MARKETS LIVE'));
+        }
+      } else if (st === 'offline') statusChip('feedChip', 'FEED OFFLINE', 'warn');
+      else statusChip('feedChip', 'FEED RECONNECTING', 'warn');
+    });
+    let lastErr = '';
+    feed.on('error', (e) => {
+      if (e.message !== lastErr) terminal('Public feed: ' + e.message, 'warn');
+      lastErr = e.message;
+    });
+    statusChip('feedChip', 'FEED CONNECTING', 'warn');
+    await feed.start();
+    terminal('Public market feed connected. Loading tick history for ' + MK.length + ' markets.', 'good');
+    await Promise.all(MK.map((m) => loadMarket(m.id)));
+    for (const m of MK) await feed.subscribeTicks(m.id, (t) => onFeedTick(m.id, t));
+    booted = true;
+    $('marketStatus').querySelector('span').textContent = MK.length + ' MARKETS LIVE';
+    terminal('Live ticks subscribed. Pick a run mode and press Start.', 'info');
+  }
+
+  /* ---------------- rendering ---------------- */
+  function scheduleRender() {
+    if (S.renderT) return;
+    S.renderT = setTimeout(() => {
+      S.renderT = 0;
+      renderAll();
+    }, 200);
+  }
+  function renderAll() {
+    const cfg = S.cfg || (S.cfg = readCfg());
+    let live = 0;
+    for (const m of MK) {
+      const buf = S.bufs[m.id];
+      const ready = S.loaded[m.id] && buf.length >= 30;
+      const s = ready ? AT.evaluate(buf, cfg) : null;
+      S.sig[m.id] = s;
+      if (s) live++;
+      const pill = $('pill_' + m.id);
+      const state = $('state_' + m.id);
+      if (buf.length) {
+        const last = buf.quotes[buf.length - 1];
+        const first = buf.quotes[0];
+        const ch = first ? (last / first - 1) * 100 : 0;
+        $('price_' + m.id).textContent = last.toFixed(buf.pip);
+        $('change_' + m.id).textContent = (ch >= 0 ? '+' : '') + ch.toFixed(3) + '% over the cached ticks';
+        $('change_' + m.id).className = 'market-change ' + (ch > 0 ? 'positive' : ch < 0 ? 'negative' : 'neutral');
+        $('ticks_' + m.id).textContent = String(buf.length);
       }
-    } catch (_) {}
+      $('card_' + m.id).classList.toggle('selected', S.sel === m.id);
+      if (!ready) {
+        pill.textContent = 'WARMING';
+        pill.className = 'pill';
+        state.textContent = 'Loading tick history';
+      } else if (s) {
+        pill.textContent = 'SIGNAL';
+        pill.className = 'pill setup';
+        state.textContent = s.label + ' · ' + s.bits + ' bits';
+      } else {
+        pill.textContent = 'NO SETUP';
+        pill.className = 'pill';
+        state.textContent = 'Rule not triggered';
+      }
+    }
+    $('mSetups').textContent = live + ' / ' + MK.length;
+    const sb = S.bufs[S.sel];
+    $('mTicks').textContent = sb.length + ' / ' + BUF;
+    $('digitSymbol').textContent = S.sel;
+    renderDigits(sb);
+    renderSignal(sb);
+  }
+  function renderDigits(buf) {
+    if (!buf.length) {
+      $('digitNote').textContent = 'Waiting for selected-market ticks.';
+      return;
+    }
+    const c = buf.counts(buf.length);
+    const max = Math.max(1, ...c);
+    c.forEach((v, i) => {
+      $('dc_' + i).textContent = v;
+      $('db_' + i).style.height = Math.max(2, (v / max) * 100) + '%';
+    });
+    $('digitNote').textContent = 'Last ' + buf.length + ' ticks · descriptive frequencies only. They are not probabilities of the next outcome.';
+  }
+  function renderSignal(buf) {
+    const cfg = S.cfg;
+    const st = $('gateStatus');
+    st.className = 'gate-status';
+    const mm = S.run && S.trader ? S.trader.mm : null;
+    $('gStake').textContent = money(mm ? mm.stake() : cfg.money.stake);
+    $('gStep').textContent = (mm ? mm.step : 0) + ' / ' + cfg.money.maxSteps;
+    $('gNet').textContent = (mm ? signed(mm.net) : '0.00') + ' / ' + (cfg.money.takeProfit ? '+' + money(cfg.money.takeProfit) : 'off');
+    $('gSl').textContent = cfg.money.stopLoss ? '−' + money(cfg.money.stopLoss) : 'off';
+    if (!S.loaded[S.sel] || buf.length < 30) {
+      $('gateTitle').textContent = 'WARMING UP';
+      $('gateReason').textContent = 'Waiting for tick history for ' + S.sel + '.';
+      $('gSig').textContent = '—';
+      $('gBits').textContent = '—';
+      $('gateBadge').textContent = 'WARMING';
+      $('gateBadge').className = 'pill';
+      return;
+    }
+    const s = S.sig[S.sel];
+    if (!s) {
+      $('gateTitle').textContent = 'NO SIGNAL';
+      $('gateReason').textContent = S.sel + ': the ' + (cfg.strategy === 'mix' ? 'mix' : AT.STRATEGIES[cfg.strategy].label) + ' rule is not triggered right now. The trader waits for the next tick that qualifies.';
+      $('gSig').textContent = '—';
+      $('gBits').textContent = '—';
+      $('gateBadge').textContent = 'NO SIGNAL';
+      $('gateBadge').className = 'pill';
+      return;
+    }
+    st.classList.add('good');
+    $('gateTitle').textContent = s.label.toUpperCase();
+    $('gateReason').textContent = s.reason + '.';
+    $('gSig').textContent = s.contract_type.replace('DIGIT', '') + (s.barrier != null ? ' ' + s.barrier : '') + (s.duration > 1 ? ' · ' + s.duration + 't' : '');
+    $('gBits').textContent = String(s.bits);
+    $('gateBadge').textContent = 'SIGNAL';
+    $('gateBadge').className = 'pill setup';
+  }
 
-    buildGrid();
-    // Connect if appId present
-    if (appIdInput.value.trim()) connect();
+  function scheduleTrades() {
+    if (S.tradeT) return;
+    S.tradeT = setTimeout(() => {
+      S.tradeT = 0;
+      renderTrades();
+    }, 120);
+  }
+  function td(text, cls) {
+    const c = document.createElement('td');
+    c.textContent = text;
+    if (cls) c.className = cls;
+    return c;
+  }
+  function renderTrades() {
+    const trades = S.session.trades; // newest first
+    const tb = $('tb');
+    const total = trades.length;
+    if (!total) tb.innerHTML = '<tr><td colspan="8" class="neutral">No trades in this session yet.</td></tr>';
+    else {
+      const frag = document.createDocumentFragment();
+      trades.slice(0, 200).forEach((t, i) => {
+        const tr = document.createElement('tr');
+        const res = t.settled ? (t.profit > 0 ? 'WIN' : 'LOSS') : String(t.status || 'pending').toUpperCase();
+        const time = new Date(t.t).toLocaleTimeString([], { hour12: false });
+        const why = td(t.reason || '—', 'why');
+        why.title = t.reason || '';
+        tr.append(
+          td(String(total - i)),
+          td(time),
+          td(t.market),
+          td(t.label + (t.manual ? ' · manual' : '')),
+          td(money(t.stake) + ' · ' + t.step),
+          why,
+          td(res, 'trade-result ' + (t.settled ? (t.profit > 0 ? 'positive' : 'negative') : 'status-' + t.status)),
+          td(t.settled ? signed(t.profit) : t.value != null ? money(t.value) : '…', t.settled ? (t.profit > 0 ? 'positive' : 'negative') : 'neutral')
+        );
+        frag.append(tr);
+      });
+      tb.innerHTML = '';
+      tb.append(frag);
+    }
+    const open = trades.filter((t) => !t.settled && t.status !== 'error');
+    $('openCount').textContent = open.length + ' OPEN';
+    const ob = $('openTb');
+    if (!open.length) ob.innerHTML = '<tr><td colspan="6" class="neutral">No open positions.</td></tr>';
+    else {
+      ob.innerHTML = '';
+      for (const t of open) {
+        const tr = document.createElement('tr');
+        const act = document.createElement('td');
+        const b = document.createElement('button');
+        b.className = 'btn danger slim';
+        b.type = 'button';
+        b.textContent = 'Sell';
+        b.disabled = !(S.active && S.active.kind === 'deriv' && t.sellable && t.id != null);
+        b.addEventListener('click', () => sellOpen(t));
+        act.append(b);
+        tr.append(td(t.id != null ? String(t.id) : 'pending…'), td(t.label), td(t.market), td(money(t.stake) + ' ' + curr()), td(t.value != null ? money(t.value) + ' ' + curr() : 'Waiting for quote'), act);
+        ob.append(tr);
+      }
+    }
+    const s = S.session.stats();
+    $('sStake').textContent = money(s.stake) + ' ' + curr();
+    $('sReturn').textContent = money(s.payout) + ' ' + curr();
+    $('sPnl').textContent = signed(s.pl) + ' ' + curr();
+    $('sPnl').className = s.pl > 0 ? 'positive' : s.pl < 0 ? 'negative' : 'neutral';
+    $('sWr').textContent = (s.runs ? pct(s.won / s.runs) : '—') + ' / ' + s.runs;
+    const mm = S.trader ? S.trader.mm : null;
+    $('lossRunNote').textContent = 'Wins ' + s.won + ' · Losses ' + s.lost + ' · Step ' + (mm ? mm.step : 0);
+    $('journalSummary').textContent = `Session summary: ${s.runs} runs · ${s.won} wins · ${s.lost} losses · total stake ${money(s.stake)} ${curr()} · total return ${money(s.payout)} ${curr()} · net P/L ${signed(s.pl)} ${curr()}.`;
+    if (S.cfg) renderSignal(S.bufs[S.sel]);
+  }
+  function curr() {
+    return (S.active && S.active.currency) || (S.client && S.client.currency) || 'USD';
+  }
 
-    // Start with idle UI
-    phaseTitle.textContent = '⏳ IDLE';
-    timerDisplay.textContent = '--';
-    statusText.textContent = 'Press Start to begin';
-    progressFill.style.width = '0%';
-  </script>
+  /* ---------------- scan overlay (real analysis lines, no filler) ---------------- */
+  let rainT = 0;
+  function startRain() {
+    const cv = $('rain');
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = (cv.width = Math.floor(innerWidth * dpr));
+    const h = (cv.height = Math.floor(innerHeight * dpr));
+    const size = 12 * dpr;
+    const cols = Math.ceil(w / size);
+    const drops = Array.from({ length: cols }, () => Math.random() * (h / size));
+    const chars = '01ABCDEF0123456789ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿ';
+    ctx.fillStyle = '#020805';
+    ctx.fillRect(0, 0, w, h);
+    const step = () => {
+      ctx.fillStyle = 'rgba(2,8,5,0.14)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#44ff9a';
+      ctx.font = size + 'px monospace';
+      for (let i = 0; i < cols; i++) {
+        ctx.fillText(chars[(Math.random() * chars.length) | 0], i * size, drops[i] * size);
+        if (drops[i] * size > h && Math.random() > 0.96) drops[i] = 0;
+        drops[i] += 0.8;
+      }
+    };
+    clearInterval(rainT);
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      for (let i = 0; i < 60; i++) step();
+      return;
+    }
+    rainT = setInterval(step, 55);
+  }
+  function openScan() {
+    $('scanLog').textContent = '';
+    $('scanOverlay').classList.add('show');
+    startRain();
+  }
+  function closeScan() {
+    $('scanOverlay').classList.remove('show');
+    clearInterval(rainT);
+  }
+  const TAG = { info: 'INFO', ok: 'OK', warn: 'WARN', error: 'ERROR', signal: 'SIGNAL' };
+  function scanLine(l) {
+    const d = document.createElement('div');
+    d.className = 'lvl-' + l.level;
+    d.textContent = '[' + (TAG[l.level] || 'INFO') + '] ' + l.text;
+    const log = $('scanLog');
+    log.append(d);
+    while (log.children.length > 60) log.firstChild.remove();
+  }
+
+  /* ---------------- trader events ---------------- */
+  function onTrader(ev, d) {
+    if (ev === 'log') {
+      const scanning = S.trader && S.trader.state === 'scanning';
+      if (scanning) scanLine(d);
+      if (scanning && d.level === 'info') return; // analysis detail stays on the scan screen
+      terminal(d.text, { ok: 'good', signal: 'good', info: 'info', warn: 'warn', error: 'error' }[d.level] || 'info');
+    } else if (ev === 'state') onState(d);
+    else if (ev === 'trade') {
+      scheduleTrades();
+      if (d.settled && !d._said) {
+        d._said = true;
+        terminal(`${d.label} ${d.market}: ${d.profit > 0 ? 'WIN' : 'LOSS'} ${signed(d.profit)} (stake ${money(d.stake)}, step ${d.step})`, d.profit > 0 ? 'good' : 'error');
+      }
+    } else if (ev === 'trade-removed') scheduleTrades();
+    else if (ev === 'stats') {
+      scheduleTrades();
+      const mt = Math.max(1, Math.floor(num('mt', 200)));
+      if (d.runs >= mt && S.trader && S.trader.state === 'running') S.trader.finish('max-trades');
+    } else if (ev === 'halt') onHalt(d);
+    else if (ev === 'error') terminal('Trader error: ' + (d && d.message ? d.message : d), 'error');
+  }
+  function onState(s) {
+    S.state = s;
+    if (s === 'scanning') {
+      openScan();
+      botState('Scanning', 'setup');
+    } else if (s === 'running') {
+      closeScan();
+      botState('Running', 'setup');
+    } else if (s === 'stopping') {
+      closeScan();
+      botState('Stopping', 'watch');
+    } else {
+      closeScan();
+      S.run = false;
+      botState('Idle', '');
+      if (S.active && (S.active.kind === 'sim' || S.active.kind === 'paper')) S.active.close();
+    }
+    syncControls();
+    scheduleTrades();
+  }
+  function onHalt(d) {
+    S.run = false;
+    const why = REASON[d.reason] || String(d.reason);
+    terminal('SESSION HALTED: ' + why, d.reason === 'take-profit' ? 'good' : 'warn');
+    if (S.session.trades.some((t) => t.status === 'unknown')) {
+      S.reconcile = true;
+      terminal('A contract never reported its result. Check your Deriv statement, then confirm in the account panel before trading again.', 'error');
+    }
+    syncControls();
+    renderTrades();
+    if (d.reason !== 'manual') showReport(why);
+  }
+  function showReport(why) {
+    const s = S.session.stats();
+    $('reportTitle').textContent = why;
+    const e = $('reportBody');
+    e.innerHTML = '';
+    const rows = [
+      ['Trades', String(s.runs)],
+      ['Wins / losses', s.won + ' / ' + s.lost],
+      ['Win rate', s.runs ? pct(s.won / s.runs) : '—'],
+      ['Total stake', money(s.stake) + ' ' + curr()],
+      ['Total return', money(s.payout) + ' ' + curr()],
+      ['Net P/L', signed(s.pl) + ' ' + curr()],
+      ['Run mode', $('execMode').selectedOptions[0].text],
+    ];
+    for (const [k, v] of rows) {
+      const p = document.createElement('p');
+      p.style.margin = '7px 0';
+      const b = document.createElement('b');
+      b.textContent = k + ': ';
+      p.append(b, document.createTextNode(v));
+      e.append(p);
+    }
+    const r = $('sessionReport');
+    if (!r.open) r.showModal();
+  }
+
+  /* ---------------- balance ---------------- */
+  function onBalance(b, kind) {
+    $('sBal').textContent = money(b.balance) + ' ' + (b.currency || 'USD');
+    $('balanceNote').textContent = kind === 'paper' ? 'Paper balance · virtual money' : kind === 'sim' ? 'Simulated balance · virtual money' : S.acct && S.acct.isReal ? 'REAL balance · proceed carefully' : 'DEMO balance · Options account';
+  }
+  function paintBalance() {
+    const mode = $('execMode').value;
+    if (mode === 'execute' && S.client && S.client.balance != null) onBalance({ balance: S.client.balance, currency: S.client.currency }, 'deriv');
+    else if (mode === 'execute') {
+      $('sBal').textContent = '—';
+      $('balanceNote').textContent = 'Connect a demo account first';
+    } else if (!S.run) {
+      $('sBal').textContent = '—';
+      $('balanceNote').textContent = mode === 'research' ? 'Research mode uses no balance' : 'Virtual balance appears when you start';
+    }
+  }
+
+  /* ---------------- controls ---------------- */
+  const LOCKED = ['strat', 'sym', 'execMode', 'stake', 'mult', 'steps', 'onMax', 'tp', 'ml', 'mt', 'maxStake', 'maxOpen', 'allMk', 'mDemo', 'mReal'];
+  function lockInputs() {
+    const lock = S.run;
+    for (const id of LOCKED) {
+      const el = $(id);
+      if (el) el.disabled = lock || (S.ready && (id === 'mDemo' || id === 'mReal'));
+    }
+    document.querySelectorAll('#stratParams input, #stratParams select, #mixBox input').forEach((el) => (el.disabled = lock));
+  }
+  function syncControls() {
+    const mode = $('execMode').value;
+    const exec = mode === 'execute';
+    $('start').disabled = S.run || S.connecting || S.reconcile || (exec && !S.ready);
+    $('start').textContent = mode === 'research' ? 'Start scan (no orders)' : 'Start trading';
+    $('stop').disabled = !S.run;
+    $('connect').disabled = S.connecting || S.ready;
+    $('disconnect').disabled = !S.client || (S.run && S.active === S.client);
+    $('reconcileBox').classList.toggle('show', S.reconcile);
+    $('connText').textContent = S.ready ? S.acct.loginid : S.connecting ? 'CONNECTING' : 'ACCOUNT OFFLINE';
+    $('connChip').className = 'status-chip' + (S.ready ? ' on' : S.connecting ? ' warn' : '');
+    $('modePill').textContent = MODE_TEXT[mode];
+    $('modeHint').textContent = MODE_HINT[mode];
+    lockInputs();
+  }
+
+  async function connectAccount() {
+    if (S.ready || S.connecting) return;
+    const token = $('pat').value.trim();
+    if (!token) {
+      terminal('Paste your scoped Deriv token first.', 'warn');
+      return;
+    }
+    S.connecting = true;
+    syncControls();
+    const c = new AT.DerivClient({ token, appId: APP_ID, prefer: S.mode, apiBase: AT.API_BASE });
+    try {
+      const info = await c.connect();
+      if (info.isReal !== (S.mode === 'real')) {
+        c.close();
+        throw new Error('No ' + S.mode + ' Options account was returned for this token. Check account access and account type.');
+      }
+      c.on('balance', (b) => {
+        if (S.client === c) onBalance(b, 'deriv');
+      });
+      c.on('status', (st) => {
+        if (S.client !== c) return;
+        if (st === 'connected') {
+          S.ready = true;
+          terminal('Account connection restored.', 'good');
+        } else if (st === 'failed') {
+          S.ready = false;
+          terminal('Account connection could not be restored. Disconnect and connect again.', 'error');
+          if (S.run && S.active === c && S.trader) S.trader.stop();
+        } else {
+          S.ready = false;
+          terminal('Account connection ' + st + '…', 'warn');
+        }
+        syncControls();
+      });
+      c.on('error', (e) => terminal('Deriv: ' + e.message, 'warn'));
+      c.on('note', (m) => terminal(m, 'warn'));
+      S.client = c;
+      S.acct = info;
+      S.ready = true;
+      $('pat').value = '';
+      statusChip('connChip', info.loginid, 'on');
+      terminal('Connected to ' + info.label + ' ' + info.loginid + ' (' + info.currency + ').', 'good');
+      paintBalance();
+    } catch (e) {
+      terminal('Connection failed: ' + e.message, 'error');
+      try {
+        c.close();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    S.connecting = false;
+    syncControls();
+  }
+  function disconnectAccount() {
+    if (!S.client) return;
+    if (S.run && S.active === S.client) {
+      terminal('Stop the session before disconnecting.', 'warn');
+      return;
+    }
+    S.client.close();
+    S.client = null;
+    S.acct = null;
+    S.ready = false;
+    $('pat').value = '';
+    terminal('Account disconnected by user.', 'info');
+    paintBalance();
+    syncControls();
+  }
+  function setMode(m) {
+    if (S.ready || S.connecting || S.run) {
+      terminal('Disconnect the account before switching Demo/Real.', 'warn');
+      return;
+    }
+    S.mode = m;
+    $('mDemo').classList.toggle('active', m === 'demo');
+    $('mReal').classList.toggle('active', m === 'real');
+    terminal('Target account type: ' + m.toUpperCase() + '.', 'info');
+  }
+
+  async function startBot() {
+    if (S.run) return;
+    const mode = $('execMode').value;
+    if (S.reconcile) {
+      terminal('Confirm in the account panel that you checked the Deriv statement first.', 'error');
+      return;
+    }
+    const cfg = (S.cfg = readCfg());
+    if (!(cfg.money.stake >= 0.35)) {
+      terminal('The base stake must be at least 0.35.', 'error');
+      return;
+    }
+    if (cfg.money.multiplier < 1) {
+      terminal('The recovery multiplier must be at least 1.', 'error');
+      return;
+    }
+    if (mode !== 'research' && !cfg.markets.length) return;
+    if (mode === 'execute') {
+      if (!S.ready || !S.client) {
+        terminal('Connect an Options account first.', 'warn');
+        return;
+      }
+      if (S.acct.isReal) {
+        if (!(cfg.money.stopLoss > 0)) {
+          terminal('Set a stop loss above 0 before trading a real account.', 'error');
+          return;
+        }
+        const ch = chain(cfg);
+        const ok = confirm(
+          'REAL MONEY\n\nYou are about to trade on ' + S.acct.loginid + '.\nBase stake ' + money(cfg.money.stake) + ', recovery ×' + cfg.money.multiplier + ', up to ' + cfg.money.maxSteps + ' recovery steps.\nA full losing chain stakes ' + money(ch.total) + '.\nTake profit ' + (cfg.money.takeProfit ? '+' + money(cfg.money.takeProfit) : 'off') + ', stop loss −' + money(cfg.money.stopLoss) + '.\n\nNo setting makes the expected result positive and you can lose the whole amount. Continue?'
+        );
+        if (!ok) return;
+      }
+    }
+    let client;
+    try {
+      if (mode === 'execute') client = S.client;
+      else if (mode === 'paper') client = new AT.PaperClient({ feed: S.feed });
+      else if (mode === 'sim') client = new AT.SimClient({ speed: 1 });
+      else client = S.feed;
+      if (mode === 'paper' || mode === 'sim') {
+        client.on('balance', (b) => {
+          if (S.active === client) onBalance(b, mode);
+        });
+        await client.connect();
+      }
+    } catch (e) {
+      terminal('Could not start: ' + e.message, 'error');
+      return;
+    }
+    S.session = new AT.Session();
+    S.active = client;
+    S.trader = new AT.Trader(client, cfg, S.session, onTrader);
+    S.run = true;
+    renderTrades();
+    syncControls();
+    terminal('Start requested · ' + $('execMode').selectedOptions[0].text + ' · ' + (cfg.strategy === 'mix' ? 'AI Mix' : AT.STRATEGIES[cfg.strategy].label) + ' · ' + cfg.markets.join(', ') + '.', 'good');
+    S.trader.start().catch((e) => terminal('Start failed: ' + e.message, 'error'));
+  }
+  function sellOpen(t) {
+    if (!S.active || t.id == null || !t.sellable) return;
+    if (!confirm('Attempt to sell contract ' + t.id + ' at its current value of ' + money(t.value) + '? The final result may differ.')) return;
+    terminal('Sell request sent for contract ' + t.id + '.', 'warn');
+    S.trader.sell(t).catch((e) => terminal('Sell failed: ' + e.message, 'error'));
+  }
+
+  /* ---------------- replay, export, reset ---------------- */
+  function renderReplay() {
+    const buf = S.bufs[S.sel];
+    const box = $('splitReport');
+    box.innerHTML = '';
+    if (buf.length < 300) {
+      box.textContent = 'Not enough ticks yet for ' + S.sel + ' (' + buf.length + '). Wait for the history to load.';
+      return;
+    }
+    const cfg = readCfg();
+    const r = AT.backtest(buf.quotes.slice(), buf.pip, cfg);
+    const head = document.createElement('div');
+    head.textContent = 'Replay on the last ' + r.ticks + ' ticks of ' + S.sel + '. One contract at a time, flat stake, no recovery. “Expected” is the hit rate the contract’s odds imply; P/L (in stakes) assumes a ' + (r.margin * 100).toFixed(1) + '% house margin and is modelled, not quoted.';
+    box.append(head);
+    for (const x of r.results) {
+      const row = document.createElement('div');
+      row.className = 'split-row';
+      const name = document.createElement('div');
+      name.textContent = x.label;
+      row.append(name);
+      const cells = [
+        ['Signals', x.signals + ' · ' + x.wins + ' won'],
+        ['Hit vs expected', x.signals ? pct(x.hit) + ' vs ' + pct(x.expectedHit) : '—'],
+        ['Flat P/L · z', x.signals ? signed(x.flatPL) + ' stakes · z ' + x.z.toFixed(2) : '—'],
+      ];
+      for (const [k, v] of cells) {
+        const c = document.createElement('div');
+        const b = document.createElement('b');
+        b.textContent = k;
+        c.append(b, document.createElement('br'), document.createTextNode(v));
+        row.append(c);
+      }
+      box.append(row);
+    }
+    const note = document.createElement('div');
+    note.className = 'risk-box';
+    note.textContent = 'A z-score between −2 and +2 means the result is within what chance produces. A rule that looks good here is usually luck in this one sample; the odds did not change because of the pattern.';
+    box.append(note);
+    terminal('Replay finished for ' + S.sel + '.', 'good');
+  }
+  function exportJournal() {
+    const rows = [['time', 'market', 'contract', 'barrier', 'duration', 'stake', 'step', 'status', 'profit', 'sell_price', 'reason', 'rarity_bits', 'contract_id']];
+    for (const t of S.session.trades.slice().reverse()) rows.push([new Date(t.t).toISOString(), t.market, t.contract_type, t.barrier == null ? '' : t.barrier, t.duration, t.stake, t.step, t.status, t.profit == null ? '' : t.profit, t.sellPrice == null ? '' : t.sellPrice, t.reason || '', t.bits, t.id == null ? '' : t.id]);
+    const csv = rows.map((r) => r.map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'emron-session-journal.csv';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    terminal('Session journal CSV exported.', 'good');
+  }
+  function clearSession() {
+    if (S.run) {
+      terminal('Stop the session first.', 'error');
+      return;
+    }
+    if (S.session.trades.length && !confirm('Clear the session totals and journal?')) return;
+    S.session = new AT.Session();
+    S.trader = null;
+    renderTrades();
+    terminal('Session cleared.', 'warn');
+  }
+
+  /* ---------------- wiring ---------------- */
+  buildGrid();
+  S.cfg = readCfg();
+  renderMix();
+  renderParams();
+  updateRisk();
+  syncControls();
+  paintBalance();
+  terminal('EMRON Autopilot booted. The live feed needs no token; paper mode and research mode work without an account.', 'info');
+
+  $('connect').addEventListener('click', connectAccount);
+  $('disconnect').addEventListener('click', disconnectAccount);
+  $('mDemo').addEventListener('click', () => setMode('demo'));
+  $('mReal').addEventListener('click', () => setMode('real'));
+  $('start').addEventListener('click', startBot);
+  $('stop').addEventListener('click', () => S.trader && S.trader.stop());
+  $('scanCancel').addEventListener('click', () => S.trader && S.trader.stop());
+  $('runReplay').addEventListener('click', renderReplay);
+  $('exportCsv').addEventListener('click', exportJournal);
+  $('reportExport').addEventListener('click', exportJournal);
+  $('closeReport').addEventListener('click', () => $('sessionReport').close());
+  $('resetSession').addEventListener('click', clearSession);
+  $('ackReconcile').addEventListener('click', () => {
+    if (!confirm('Confirm that you checked the Deriv statement and open contracts for the contract that did not report.')) return;
+    S.reconcile = false;
+    terminal('Reconciliation acknowledged. Trading stays stopped until you press Start.', 'good');
+    syncControls();
+  });
+  $('sym').addEventListener('change', () => selectMarket($('sym').value));
+  $('strat').addEventListener('change', () => {
+    renderMix();
+    renderParams();
+    onCfgChanged();
+  });
+  $('execMode').addEventListener('change', () => {
+    if ($('execMode').value === 'execute') terminal('Account execution selected. Connect an Options account, and start on demo.', 'warn');
+    syncControls();
+    paintBalance();
+    onCfgChanged();
+  });
+  for (const id of ['stake', 'mult', 'steps', 'onMax', 'tp', 'ml', 'mt', 'maxStake', 'maxOpen', 'allMk']) $(id).addEventListener('change', onCfgChanged);
+  window.addEventListener('beforeunload', () => {
+    try {
+      if (S.feed) S.feed.close();
+      if (S.client) S.client.close();
+    } catch (_) {
+      /* ignore */
+    }
+  });
+  bootFeed().catch((e) => terminal('Feed start failed: ' + e.message, 'error'));
+})();
+
+</script>
 </body>
 </html>
